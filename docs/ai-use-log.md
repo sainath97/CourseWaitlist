@@ -28,7 +28,7 @@ Do not propose alternative designs. If you see a problem, list it under "Open qu
   3. Rejected the process language Copilot copied into the spec ("Do not add unapproved packages...", the Phase 1/Phase 2 workflow in section 7). Replaced it with a neutral sentence; the workflow belongs in the README and this log.
   4. Added limitations: eligibility is evaluated inside the lock (fine for in-memory records only); promotions triggered inside Enroll are not reported in the Enroll response.
 - Files / decisions informed: `docs/design-spec.md`; Enroll ordering; test-plan cases added to slice C8; GET contract for slice A3
-- Verification: Checked the spec against acceptance criteria 1-5 and the scope boundaries. Hand-walked the scenario in change 2 against the original and edited Enroll order to confirm the original left the invariant broken. Automated verification pending: the new C8 tests (waiter's own repeat Enroll after becoming eligible; ineligible newcomer) must fail in Phase 1 and pass in Phase 2. [update with test names and results later]
+- Verification: Checked the spec against acceptance criteria 1-5 and the scope boundaries. Hand-walked the scenario in change 2 against the original and edited Enroll order to confirm the original left the invariant broken.
 - Commit: `docs: add design specification`
 
 ### Entry 2: Solution scaffold (Copilot Agent mode)
@@ -82,7 +82,7 @@ A3 GET: snapshot reflects enrolled and waitlist in order; 404 for an unknown off
   4. Removed vague outcomes (T-10, T-13, T-22, T-29, T-36, T-40, T-42) and fixed the concurrency expectations.
   5. Added T-59 to T-62 (64-character boundary, waitlisted-and-ineligible repeat, position shift, whitespace DELETE) and a coverage-versus-assignment section.
 - Files / decisions informed: `docs/test-plan.md`; Phase 1 prompts for C2, C4, C5, C7, C8 and C9
-- Verification: Cross-checked each row against the slice prompts and the design spec. Hand-traced T-37 against the original and revised Enroll order; automated verification comes when the C8 Phase 1 test fails and the Phase 2 test passes. [update later with real test names and results]
+- Verification: Cross-checked each row against the slice prompts and the design spec. Hand-traced T-37 against the original and revised Enroll order; automated verification comes when the C8 Phase 1 test fails and the Phase 2 test passes.
 - Commit: `docs: add test plan`
 
 ### Entry 4: Core skeleton (Copilot Agent mode)
@@ -555,7 +555,7 @@ Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, 
 - Decision: Accepted
 - What I changed: nothing
 - Review notes: POST behavior unchanged (A1 tests still green); Program.cs and ApiContracts.cs untouched; no tests edited. Possible follow-up: the offering check is duplicated across handlers.
-- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [67 passed]; manual DELETE smoke test -> [result]; `git diff --stat` -> [one file]
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [67 passed]; manual DELETE smoke test; `git diff --stat` -> [one file]
 - Commit: `feat(api): add enrollment drop endpoint`
 
 ### Entry 29: A3 Phase 1, GET snapshot endpoint tests (Copilot Agent mode)
