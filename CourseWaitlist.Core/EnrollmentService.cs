@@ -14,6 +14,7 @@ public class EnrollmentService
 {
     private readonly OfferingOptions _options;
     private readonly ILearnerRecords _records;
+    private readonly List<string> _enrolled = new();
 
     public EnrollmentService(OfferingOptions options, ILearnerRecords records)
     {
@@ -28,12 +29,19 @@ public class EnrollmentService
 
     public EnrollResult Enroll(string? learnerId)
     {
-        if (NormalizeLearnerId(learnerId) is null)
+        var normalizedLearnerId = NormalizeLearnerId(learnerId);
+        if (normalizedLearnerId is null)
         {
             return new EnrollResult(EnrollOutcome.InvalidRequest, null);
         }
 
-        throw new NotImplementedException();
+        if (_enrolled.Count >= _options.Capacity)
+        {
+            throw new NotImplementedException();
+        }
+
+        _enrolled.Add(normalizedLearnerId);
+        return new EnrollResult(EnrollOutcome.Enrolled, null);
     }
 
     public DropResult Drop(string? learnerId)
@@ -52,7 +60,7 @@ public class EnrollmentService
             _options.Id,
             _options.CourseCode,
             _options.Capacity,
-            Array.Empty<string>(),
+            _enrolled.ToArray(),
             Array.Empty<string>());
     }
 

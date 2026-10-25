@@ -162,3 +162,20 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: the new
 - Review notes: traits present; assertions check outcome, exact snapshot and invariants; no production or C1 test files touched. Gap noted: snapshot-copy behavior has no test yet (optional T-64).
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C2` -> [6 failed, all at Enroll stub]; `dotnet test --filter Slice=C1` -> [12 passed]; `git diff --stat` -> [two test files]
 - Commit: `test(core): add C2 enrollment capacity tests`
+
+### Entry 8: C2 Phase 2, enroll within capacity (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C2. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C2 tests:
+- Add a private enrolled list (List<string>).
+- In Enroll, after validation, add the trimmed learner id and return EnrollResult(EnrollOutcome.Enrolled, null).
+- GetSnapshot returns the configured offering plus a COPY of the enrolled list and an empty waitlist.
+- The full-capacity path stays NotImplementedException (not covered by C2 tests): if the enrolled count is already at capacity, throw NotImplementedException.
+- Drop for valid ids stays NotImplementedException. No locking, no duplicate handling, no eligibility check yet.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: a private enrolled list, Enroll adds the trimmed id and returns Enrolled while a seat is free, GetSnapshot returns a copy of the enrolled list. Full-capacity path and valid Drop remain NotImplemented. Build clean; 18 passed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: no duplicate, eligibility, waitlist or locking logic added early; snapshot is a copy; no tests edited. Known intentional gap: repeated Enroll of the same id adds a second entry until slice C5.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [18 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): support enrollment within capacity`
