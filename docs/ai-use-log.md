@@ -140,3 +140,25 @@ Run dotnet build, then dotnet test (all tests), quote the real output, STOP, lis
 - Review notes: constructor throws ArgumentException exactly; trim-then-length matches the spec; no test files were edited; GetSnapshot currently returns Array.Empty, so C2 must replace it with real copies.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [12 passed]; `git diff --stat` -> [only EnrollmentService.cs]
 - Commit: `feat(core): implement C1 enrollment validation`
+
+### Entry 7: C2 Phase 1, enrollment capacity tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C2 (enroll while seats are available). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/EnrollmentCapacityTests.cs. Files you may edit: CourseWaitlist.Tests/Support/TestServiceBuilder.cs (only to add the helper below). Touch nothing else, and do not edit EnrollmentValidationTests.cs or any production file.
+- In TestServiceBuilder add an instance method ExpectedSnapshot(string[] enrolled, string[]? waitlist = null) that returns an OfferingSnapshot using the builder's CURRENT offering id, course code and capacity, so tests do not hard-code those values. Keep the existing defaults unchanged.
+- Implement T-09, T-10, T-11, T-12, T-13 and T-59 from #file:docs/test-plan.md in EnrollmentCapacityTests. Use xUnit + FluentAssertions 7.x only. Compare snapshots with ShouldMatch and call AssertInvariants on every snapshot. Add [Trait("Slice","C2")] and [Trait("Case","T-xx")] to every test. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments.
+- T-09: result Outcome is Enrolled and WaitlistPosition is null.
+- T-10: Enroll "  alice  " returns Enrolled; the snapshot's enrolled list is exactly ["alice"].
+- T-11: capacity 2; Enroll A then B both return Enrolled; snapshot enrolled is exactly ["A","B"] in that order with an empty waitlist.
+- T-12: capacity 1; Enroll A returns Enrolled; snapshot enrolled is ["A"] with an empty waitlist.
+- T-13: no prerequisite configured; a learner with no completed courses gets Enrolled.
+- T-59: a 64-character id (new string('a', 64)) returns Enrolled and appears in the snapshot.
+- Do NOT enroll beyond capacity or test the waitlist or prerequisites in this slice.
+Run dotnet build, then dotnet test, and quote the real output. Expected: the new tests fail with NotImplementedException from Enroll; the 12 C1 tests still pass. Report any other failure reason. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added EnrollmentCapacityTests (6 tests, T-09/10/11/12/13/59) and an ExpectedSnapshot helper on TestServiceBuilder. Run: 6 failed (NotImplementedException from Enroll), 12 passed, total 18; build clean.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: traits present; assertions check outcome, exact snapshot and invariants; no production or C1 test files touched. Gap noted: snapshot-copy behavior has no test yet (optional T-64).
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C2` -> [6 failed, all at Enroll stub]; `dotnet test --filter Slice=C1` -> [12 passed]; `git diff --stat` -> [two test files]
+- Commit: `test(core): add C2 enrollment capacity tests`

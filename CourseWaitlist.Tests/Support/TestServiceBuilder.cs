@@ -35,5 +35,13 @@ public sealed class TestServiceBuilder
         return this;
     }
 
+    public OfferingSnapshot ExpectedSnapshot(string[] enrolled, string[]? waitlist = null) =>
+        new(
+            _options.Id,
+            _options.CourseCode,
+            _options.Capacity,
+            enrolled,
+            waitlist ?? Array.Empty<string>());
+
     public EnrollmentService Build() => new(_options, Records);
 }
