@@ -432,3 +432,22 @@ Run dotnet build, then run `dotnet test --no-build` three times sequentially and
 - Review notes: every access to shared state is inside the three public methods or helpers called from them; no other primitive or async; XML-doc untouched; no tests edited. Lock order is service lock then the records' internal lock, which is deadlock-free because the records type never calls back.
 - Verification (my own runs): locked 10-run green: [10/10 runs passed 52]; `git diff` -> [one field and three lock wrappers]
 - Commit: `feat(core): serialize service operations with a single lock`
+
+### Entry 23: A0 Phase 1, API composition tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice A0 (API composition and config validation). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/Api/ApiFactory.cs and CourseWaitlist.Tests/Api/CompositionTests.cs. Touch nothing else, including all production files.
+- ApiFactory: a class deriving from WebApplicationFactory<Program>. Its constructor takes an optional IDictionary<string, string?> overrides. In ConfigureWebHost use ConfigureAppConfiguration to add an in-memory collection: defaults Offering:Id=CS201-TEST, Offering:CourseCode=CS201, Offering:Capacity=2, Offering:PrerequisiteCourseCode=CS101, LearnerRecords:learner-001:0=CS101, LearnerRecords:learner-002:0=CS101, LearnerRecords:learner-003:0=CS101 (learner-004 has no courses). Apply the overrides AFTER the defaults so they win. Use UseEnvironment("Testing").
+- Implement T-43, T-44 and T-45 from #file:docs/test-plan.md in CompositionTests with xUnit + FluentAssertions 7.x only. Use `using var factory` in each test. Add [Trait("Slice","A0")] and [Trait("Case","T-xx")]. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments.
+  - T-43: default factory. Resolve EnrollmentService from factory.Services (GetRequiredService) and call GetSnapshot: OfferingId "CS201-TEST", CourseCode "CS201", Capacity 2, empty Enrolled and empty Waitlist.
+  - T-44: override Offering:Capacity = "0". Calling factory.CreateClient() must throw; assert the thrown exception, or any exception in its InnerException chain, is a Microsoft.Extensions.Options.OptionsValidationException (write a small helper that walks the chain).
+  - T-45: override Offering:Id = "" (blank stands in for a missing id). factory.CreateClient() must throw with the same chain assertion.
+Do not test any HTTP endpoint in this slice.
+Run dotnet build, then dotnet test, and quote the real output. Expected: T-43 fails with InvalidOperationException saying EnrollmentService is not registered (service registration is the behavior under test); T-44 and T-45 fail with "Expected a <Exception> to be thrown, but no exception was thrown"; the existing 52 tests still pass. Report any other failure reason, including compile errors, or any new test that passes, and do not delete or change it. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added ApiFactory (WebApplicationFactory with layered in-memory config) and CompositionTests (T-43, T-44, T-45). Run: 3 failed, 52 passed, total 55; build clean. T-43 failed on the unregistered EnrollmentService; T-44 and T-45 failed with "no exception thrown".
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: the failures prove the host starts with the template Program and the test configuration; overrides are applied after defaults; no endpoint tests in this slice; no production files touched.
+- Verification (my own runs): `dotnet test --filter Slice=A0` -> [3 failed, reasons checked]; `git diff --stat` -> [two test files]
+- Commit: `test(api): add A0 composition tests`
