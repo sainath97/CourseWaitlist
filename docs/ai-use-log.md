@@ -84,3 +84,26 @@ A3 GET: snapshot reflects enrolled and waitlist in order; 404 for an unknown off
 - Files / decisions informed: `docs/test-plan.md`; Phase 1 prompts for C2, C4, C5, C7, C8 and C9
 - Verification: Cross-checked each row against the slice prompts and the design spec. Hand-traced T-37 against the original and revised Enroll order; automated verification comes when the C8 Phase 1 test fails and the Phase 2 test passes. [update later with real test names and results]
 - Commit: `docs: add test plan`
+
+### Entry 4: Core skeleton (Copilot Agent mode)
+- Prompt (sanitized):
+Step: Core skeleton. One concern: public types and signatures only; no behavior. Namespace CourseWaitlist.Core.
+Files you may create: CourseWaitlist.Core/OfferingOptions.cs, EnrollOutcome.cs, DropOutcome.cs, EnrollResult.cs, DropResult.cs, OfferingSnapshot.cs, ILearnerRecords.cs, InMemoryLearnerRecords.cs, EnrollmentService.cs. Touch nothing else. Delete the template Class1.cs if it exists.
+- OfferingOptions: sealed class with get/set properties (string Id = "", string CourseCode = "", int Capacity, string? PrerequisiteCourseCode) so the configuration binder can fill it.
+- enum EnrollOutcome { Enrolled, Waitlisted, AlreadyEnrolled, AlreadyWaitlisted, PrerequisiteNotMet, InvalidRequest }
+- enum DropOutcome { Dropped, RemovedFromWaitlist, NotEnrolled, InvalidRequest }
+- record EnrollResult(EnrollOutcome Outcome, int? WaitlistPosition)
+- record DropResult(DropOutcome Outcome, IReadOnlyList<string> PromotedLearnerIds)
+- record OfferingSnapshot(string OfferingId, string CourseCode, int Capacity, IReadOnlyList<string> Enrolled, IReadOnlyList<string> Waitlist) with Waitlist in FIFO order.
+- ILearnerRecords { bool HasCompleted(string learnerId, string courseCode); }
+- InMemoryLearnerRecords : ILearnerRecords, FULLY implemented (it is a data holder, not behavior under test): Add(learnerId, courseCode), Remove(learnerId, courseCode), HasCompleted. Case-insensitive keys on both sides. Safe for concurrent reads, using an internal lock.
+- EnrollmentService(OfferingOptions options, ILearnerRecords records): store the constructor arguments only. Enroll(string? learnerId) -> EnrollResult, Drop(string? learnerId) -> DropResult, GetSnapshot() -> OfferingSnapshot. Each method body is `throw new NotImplementedException();`.
+Add XML-doc at the top of EnrollmentService listing the invariants from #file:docs/design-spec.md.
+Run `dotnet build` and report the real output. STOP, list changed files, propose a Conventional Commit message.
+
+- Response summary: Copilot created nine files in CourseWaitlist.Core: options class, two outcome enums, three result types, ILearnerRecords, a fully implemented InMemoryLearnerRecords, and EnrollmentService with stubbed methods and the invariants XML-doc. It reported a clean build.
+- Decision: Accepted
+- What I changed: nothing. I noted one design risk for later tests: record equality on `IReadOnlyList` properties compares by reference, so snapshot comparisons must be structural.
+- Files / decisions informed: Core public API; C1 test-support helpers
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [no tests, expected]; `git diff --stat` -> [only the nine Core files]
+- Commit: `feat(core): add enrollment service skeleton`
