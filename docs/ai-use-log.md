@@ -324,3 +324,22 @@ Run dotnet build, then dotnet test (all tests), quote the real output, STOP, lis
 - Review notes: remaining waitlist entries keep order and Sequence values; NotEnrolled changes no state; Enroll untouched; no lock or promotion code added early. Known intermediate state: invariant 5 is not yet enforced (no promotion until C7, no reconciliation in Enroll until C8); tests T-30 to T-38 are planned and must fail first. Possible later refactor: Enroll and Drop duplicate the same lookups.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [38 passed]; `git diff --stat` -> [only EnrollmentService.cs]
 - Commit: `feat(core): support dropping enrollments and waitlist entries`
+
+### Entry 17: C7 Phase 1, FIFO promotion tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C7 (FIFO promotion on drop). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/PromotionTests.cs. Touch nothing else, including TestServiceBuilder.cs and all production files.
+Implement T-30, T-31, T-32 and T-61 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use the existing TestServiceBuilder (WithCapacity, WithPrerequisite, ExpectedSnapshot), ShouldMatch and AssertInvariants. Add [Trait("Slice","C7")] and [Trait("Case","T-xx")] to every test. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments. Assert the Drop OUTCOME first, then PromotedLearnerIds (use .Should().Equal(...)), then the snapshot. Use no prerequisite in any test (every waiter is eligible; eligibility during promotion is slice C8). Do not use concurrency.
+Write exactly these 4 tests:
+1. T-30: capacity 1. Enroll A (Enrolled), B (Waitlisted position 1), C (Waitlisted position 2). Drop A returns Dropped with PromotedLearnerIds ["B"]. Snapshot enrolled ["B"], waitlist ["C"].
+2. T-31: capacity 1. Enroll A, B, C, D (A enrolled; B, C, D waitlisted). Drop A returns Dropped with PromotedLearnerIds ["B"]. Then Drop B returns Dropped with PromotedLearnerIds ["C"]. Final snapshot enrolled ["C"], waitlist ["D"].
+3. T-32: capacity 1. Enroll A, B, C. Drop B returns RemovedFromWaitlist with empty PromotedLearnerIds. Drop A returns Dropped with PromotedLearnerIds ["C"] (B is NOT promoted). Snapshot enrolled ["C"], waitlist empty.
+4. T-61: capacity 1. Enroll A, B, C. Drop A returns Dropped with PromotedLearnerIds ["B"]. Then Enroll C again returns AlreadyWaitlisted at position 1 (not 2). Snapshot enrolled ["B"], waitlist ["C"].
+Run dotnet build, then dotnet test, and quote the real output. Expected: all 4 new tests FAIL on assertions (for example PromotedLearnerIds expected ["B"] but found empty), not on NotImplementedException and not on compile errors; the existing 38 tests still pass. Report any other failure reason or any new test that passes, and do not delete or change it. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added PromotionTests with four tests (T-30, T-31, T-32, T-61). Run: 4 failed on assertions (PromotedLearnerIds empty instead of the expected earliest waiter), 38 passed, total 42; build clean.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: T-32 fails only at the second drop (first drop's RemovedFromWaitlist assertions pass), isolating the missing promotion. No prerequisites or concurrency used; no unexpectedly passing tests; no production files touched.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C7` -> [4 failed, all on PromotedLearnerIds]; `git diff --stat` -> [only the new test file]
+- Commit: `test(core): add C7 FIFO promotion tests`
