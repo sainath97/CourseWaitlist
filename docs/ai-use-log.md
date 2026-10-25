@@ -230,3 +230,19 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: T-16, T
 - Review notes: T-18 passed early because eligibility is checked before capacity; kept on purpose as a guard that ineligible learners never reach the waitlist. Positions and snapshot lists are asserted exactly; no production files touched.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C4` -> [3 failed at the Enroll stub, 1 passed]; `git diff --stat` -> [only the new test file]
 - Commit: `test(core): add C4 waitlist tests`
+
+### Entry 12: C4 Phase 2, FIFO waitlist (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C4. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C4 tests:
+- Add a private nested sealed record WaitlistEntry(string LearnerId, long Sequence), a private List<WaitlistEntry> _waitlist, and a private long _nextSequence (monotonic counter; no timestamps).
+- In Enroll, replace the full-capacity NotImplementedException: when _enrolled.Count >= Capacity, append new WaitlistEntry(normalizedLearnerId, _nextSequence++) and return EnrollResult(EnrollOutcome.Waitlisted, the 1-based position, which equals _waitlist.Count after the append).
+- GetSnapshot returns copies: the enrolled array and the waitlist learner ids in ascending Sequence order.
+- Keep the order: validation, then eligibility, then capacity. Drop for valid ids stays NotImplementedException. No duplicate handling, no locking.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: private WaitlistEntry record, a monotonic long sequence counter, append to the waitlist when the offering is full and return Waitlisted with a 1-based position, and a snapshot that projects waitlisted ids in sequence order. Build clean; 24 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: order of checks (validation, eligibility, capacity) preserved; no timestamps; no duplicate, drop or lock code added early; no tests edited. Known intentional gap: repeated Enroll still creates duplicates until slice C5.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [24 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): add FIFO waitlist entries`

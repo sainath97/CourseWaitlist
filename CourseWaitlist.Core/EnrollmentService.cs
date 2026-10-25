@@ -12,9 +12,13 @@ namespace CourseWaitlist.Core;
 /// </summary>
 public class EnrollmentService
 {
+    private sealed record WaitlistEntry(string LearnerId, long Sequence);
+
     private readonly OfferingOptions _options;
     private readonly ILearnerRecords _records;
     private readonly List<string> _enrolled = new();
+    private readonly List<WaitlistEntry> _waitlist = new();
+    private long _nextSequence;
 
     public EnrollmentService(OfferingOptions options, ILearnerRecords records)
     {
@@ -42,7 +46,8 @@ public class EnrollmentService
 
         if (_enrolled.Count >= _options.Capacity)
         {
-            throw new NotImplementedException();
+            _waitlist.Add(new WaitlistEntry(normalizedLearnerId, _nextSequence++));
+            return new EnrollResult(EnrollOutcome.Waitlisted, _waitlist.Count);
         }
 
         _enrolled.Add(normalizedLearnerId);
@@ -66,7 +71,10 @@ public class EnrollmentService
             _options.CourseCode,
             _options.Capacity,
             _enrolled.ToArray(),
-            Array.Empty<string>());
+            _waitlist
+                .OrderBy(entry => entry.Sequence)
+                .Select(entry => entry.LearnerId)
+                .ToArray());
     }
 
     private static string? NormalizeLearnerId(string? learnerId)
