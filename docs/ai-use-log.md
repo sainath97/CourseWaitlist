@@ -308,3 +308,19 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: all 6 n
 - Review notes: no test drops an enrolled learner while the waitlist is non-empty (promotion belongs to C7); later assertions (seat reuse, position shift) only become effective after Phase 2. No unexpectedly passing tests.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C6` -> [6 failed at the Drop stub]; `git diff --stat` -> [only the new test file]
 - Commit: `test(core): add C6 drop tests`
+
+### Entry 16: C6 Phase 2, drop implementation (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C6. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C6 tests. Replace the NotImplementedException in Drop (valid ids only) with:
+1. If the normalized id matches an entry in _enrolled (StringComparer.OrdinalIgnoreCase), remove it and return DropResult(DropOutcome.Dropped, an empty list).
+2. Else if it matches an entry in _waitlist (OrdinalIgnoreCase), remove that entry and return DropResult(DropOutcome.RemovedFromWaitlist, an empty list). Remaining entries keep their order and their Sequence values.
+3. Else return DropResult(DropOutcome.NotEnrolled, an empty list) with no state change.
+Do NOT promote anyone, do NOT add FillFreeSeats, and do NOT change Enroll or add locking; promotion is slice C7. Keep the InvalidRequest path as is.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: Drop now removes an enrolled learner (Dropped), else removes a matching waitlist entry (RemovedFromWaitlist), else returns NotEnrolled; OrdinalIgnoreCase on trimmed ids; no promotion. Build clean; 38 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: remaining waitlist entries keep order and Sequence values; NotEnrolled changes no state; Enroll untouched; no lock or promotion code added early. Known intermediate state: invariant 5 is not yet enforced (no promotion until C7, no reconciliation in Enroll until C8); tests T-30 to T-38 are planned and must fail first. Possible later refactor: Enroll and Drop duplicate the same lookups.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [38 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): support dropping enrollments and waitlist entries`

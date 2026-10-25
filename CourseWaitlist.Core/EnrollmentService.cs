@@ -70,12 +70,29 @@ public class EnrollmentService
 
     public DropResult Drop(string? learnerId)
     {
-        if (NormalizeLearnerId(learnerId) is null)
+        var normalizedLearnerId = NormalizeLearnerId(learnerId);
+        if (normalizedLearnerId is null)
         {
             return new DropResult(DropOutcome.InvalidRequest, Array.Empty<string>());
         }
 
-        throw new NotImplementedException();
+        var enrolledIndex = _enrolled.FindIndex(
+            enrolledLearnerId => StringComparer.OrdinalIgnoreCase.Equals(enrolledLearnerId, normalizedLearnerId));
+        if (enrolledIndex >= 0)
+        {
+            _enrolled.RemoveAt(enrolledIndex);
+            return new DropResult(DropOutcome.Dropped, Array.Empty<string>());
+        }
+
+        var waitlistIndex = _waitlist.FindIndex(
+            entry => StringComparer.OrdinalIgnoreCase.Equals(entry.LearnerId, normalizedLearnerId));
+        if (waitlistIndex >= 0)
+        {
+            _waitlist.RemoveAt(waitlistIndex);
+            return new DropResult(DropOutcome.RemovedFromWaitlist, Array.Empty<string>());
+        }
+
+        return new DropResult(DropOutcome.NotEnrolled, Array.Empty<string>());
     }
 
     public OfferingSnapshot GetSnapshot()
