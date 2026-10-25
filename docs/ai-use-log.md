@@ -246,3 +246,26 @@ Run dotnet build, then dotnet test (all tests), quote the real output, STOP, lis
 - Review notes: order of checks (validation, eligibility, capacity) preserved; no timestamps; no duplicate, drop or lock code added early; no tests edited. Known intentional gap: repeated Enroll still creates duplicates until slice C5.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [24 passed]; `git diff --stat` -> [only EnrollmentService.cs]
 - Commit: `feat(core): add FIFO waitlist entries`
+
+### Entry 13: C5 Phase 1, duplicate request tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C5 (idempotent duplicate requests). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/EnrollmentDuplicateTests.cs. Touch nothing else, including TestServiceBuilder.cs and all production files.
+Implement T-20, T-21, T-22, T-23, T-24 and T-60 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use the existing TestServiceBuilder (WithCapacity, WithPrerequisite, WithCompleted, Records, ExpectedSnapshot), ShouldMatch and AssertInvariants. Add [Trait("Slice","C5")] and [Trait("Case","T-xx")] to every test. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments. Assert the OUTCOME first, then the snapshot. Never call Drop.
+Write exactly these 8 tests:
+1. T-20: capacity 2, no prerequisite. Enroll A returns Enrolled; Enroll A again returns AlreadyEnrolled with a null WaitlistPosition. Snapshot enrolled ["A"], waitlist empty.
+2. T-21: capacity 1, no prerequisite. Enroll A (Enrolled), B (Waitlisted position 1), C (Waitlisted position 2). Enroll B again returns AlreadyWaitlisted with position 1; Enroll C again returns AlreadyWaitlisted with position 2. Snapshot enrolled ["A"], waitlist ["B","C"] (one record each).
+3. T-22 (enrolled variants): capacity 2, no prerequisite. Enroll " Alice " returns Enrolled; Enroll "alice" and Enroll "ALICE" each return AlreadyEnrolled. Snapshot enrolled ["Alice"] (trimmed, first-seen casing), waitlist empty.
+4. T-22 (waitlisted variants): capacity 1, no prerequisite. Enroll A (Enrolled), " Bob " (Waitlisted position 1); Enroll "bob" and "BOB" each return AlreadyWaitlisted at position 1. Snapshot enrolled ["A"], waitlist ["Bob"].
+5. T-23: capacity 1, prerequisite "CS101", A completed it (WithCompleted). Enroll A returns Enrolled. Then builder.Records.Remove("A","CS101"). Enroll A again returns AlreadyEnrolled (NOT PrerequisiteNotMet). Snapshot enrolled ["A"].
+6. T-24 (enrolled duplicate): capacity 2, no prerequisite. Enroll A, take a snapshot, Enroll A again, take another; the second ShouldMatch the first.
+7. T-24 (waitlisted duplicate): capacity 1, no prerequisite. Enroll A, B (waitlisted), take a snapshot, Enroll B again, take another; the second ShouldMatch the first.
+8. T-60: capacity 1, prerequisite "CS101"; A and B both completed it. Enroll A (Enrolled), B (Waitlisted position 1). Then builder.Records.Remove("B","CS101"). Enroll B again returns AlreadyWaitlisted at position 1 (NOT PrerequisiteNotMet). Snapshot enrolled ["A"], waitlist ["B"].
+Run dotnet build, then dotnet test, and quote the real output. Expected: all 8 new tests FAIL on assertions (for example "expected AlreadyEnrolled but found Enrolled/Waitlisted" or "found PrerequisiteNotMet"), not on NotImplementedException and not on compile errors. If any new test passes, report it explicitly and do not delete or change it. Report any other failure reason. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added EnrollmentDuplicateTests with eight tests (T-20, T-21, T-22 x2, T-23, T-24 x2, T-60). Run: 8 failed, 24 passed, total 32; build clean. All failures were outcome assertions (found Enrolled, Waitlisted or PrerequisiteNotMet instead of AlreadyEnrolled or AlreadyWaitlisted); none hit stubs.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: T-23 and T-60 guard the rule that the duplicate check runs before the eligibility check. Snapshot-unchanged assertions in T-24 only become effective after Phase 2 (the outcome assertion fails first). No unexpectedly passing tests. No production files touched.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C5` -> [8 failed, reasons checked]; `git diff --stat` -> [only the new test file]
+- Commit: `test(core): add C5 duplicate enrollment tests`
