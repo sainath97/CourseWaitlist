@@ -417,3 +417,18 @@ Run dotnet build, then run dotnet test THREE times sequentially (never in parall
 - Review finding: first red evidence was flaky (3 of 4 C9 tests failing on average across 3 runs). Per-test 10-run table: T-39 10/10, T-41 10/10, T-40 4/10, T-42 1/10. Cause: tiny race windows in T-40 and T-42 plus a blocking start gate. Follow-up: spin-gate start and more iterations (T-40 300, T-42 1000).
 - Verification (my own runs): 10-run per-test failure table: T-39 10/10, T-41 10/10, T-40 4/10, T-42 1/10; `git diff --stat`: [two test files]
 - Commit: `test(core): add C9 concurrency tests`
+
+### Entry 22: C9 Phase 2, single lock (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C9 concurrency. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C9 tests:
+- Add ONE private readonly object field named _gate with the single-line comment: "Single lock guards all mutable state; eligibility is evaluated inside it."
+- Wrap the entire bodies of the public methods Enroll, Drop and GetSnapshot in lock (_gate).
+- Do not add any other synchronization primitive, do not use async, do not change FillFreeSeats, IsEligible, the XML-doc or any other line.
+Run dotnet build, then run `dotnet test --no-build` three times sequentially and quote each real result. Expected: 52 passed, 0 failed in every run. Report any failure by test name. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: added one private lock object and wrapped the bodies of Enroll, Drop and GetSnapshot in it. Build clean; three sequential full runs: 52 passed, 0 failed (about 25 s each).
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: every access to shared state is inside the three public methods or helpers called from them; no other primitive or async; XML-doc untouched; no tests edited. Lock order is service lock then the records' internal lock, which is deadlock-free because the records type never calls back.
+- Verification (my own runs): locked 10-run green: [10/10 runs passed 52]; `git diff` -> [one field and three lock wrappers]
+- Commit: `feat(core): serialize service operations with a single lock`

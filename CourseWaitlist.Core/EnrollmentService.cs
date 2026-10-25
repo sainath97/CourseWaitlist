@@ -16,6 +16,8 @@ public class EnrollmentService
 
     private readonly OfferingOptions _options;
     private readonly ILearnerRecords _records;
+    // Single lock guards all mutable state; eligibility is evaluated inside it.
+    private readonly object _gate = new();
     private readonly List<string> _enrolled = new();
     private readonly List<WaitlistEntry> _waitlist = new();
     private long _nextSequence;
@@ -33,81 +35,90 @@ public class EnrollmentService
 
     public EnrollResult Enroll(string? learnerId)
     {
-        var normalizedLearnerId = NormalizeLearnerId(learnerId);
-        if (normalizedLearnerId is null)
+        lock (_gate)
         {
-            return new EnrollResult(EnrollOutcome.InvalidRequest, null);
+            var normalizedLearnerId = NormalizeLearnerId(learnerId);
+            if (normalizedLearnerId is null)
+            {
+                return new EnrollResult(EnrollOutcome.InvalidRequest, null);
+            }
+
+            FillFreeSeats();
+
+            var enrolledIndex = _enrolled.FindIndex(
+                enrolledLearnerId => StringComparer.OrdinalIgnoreCase.Equals(enrolledLearnerId, normalizedLearnerId));
+            if (enrolledIndex >= 0)
+            {
+                return new EnrollResult(EnrollOutcome.AlreadyEnrolled, null);
+            }
+
+            var waitlistIndex = _waitlist.FindIndex(
+                entry => StringComparer.OrdinalIgnoreCase.Equals(entry.LearnerId, normalizedLearnerId));
+            if (waitlistIndex >= 0)
+            {
+                return new EnrollResult(EnrollOutcome.AlreadyWaitlisted, waitlistIndex + 1);
+            }
+
+            if (!IsEligible(normalizedLearnerId))
+            {
+                return new EnrollResult(EnrollOutcome.PrerequisiteNotMet, null);
+            }
+
+            if (_enrolled.Count >= _options.Capacity)
+            {
+                _waitlist.Add(new WaitlistEntry(normalizedLearnerId, _nextSequence++));
+                return new EnrollResult(EnrollOutcome.Waitlisted, _waitlist.Count);
+            }
+
+            _enrolled.Add(normalizedLearnerId);
+            return new EnrollResult(EnrollOutcome.Enrolled, null);
         }
-
-        FillFreeSeats();
-
-        var enrolledIndex = _enrolled.FindIndex(
-            enrolledLearnerId => StringComparer.OrdinalIgnoreCase.Equals(enrolledLearnerId, normalizedLearnerId));
-        if (enrolledIndex >= 0)
-        {
-            return new EnrollResult(EnrollOutcome.AlreadyEnrolled, null);
-        }
-
-        var waitlistIndex = _waitlist.FindIndex(
-            entry => StringComparer.OrdinalIgnoreCase.Equals(entry.LearnerId, normalizedLearnerId));
-        if (waitlistIndex >= 0)
-        {
-            return new EnrollResult(EnrollOutcome.AlreadyWaitlisted, waitlistIndex + 1);
-        }
-
-        if (!IsEligible(normalizedLearnerId))
-        {
-            return new EnrollResult(EnrollOutcome.PrerequisiteNotMet, null);
-        }
-
-        if (_enrolled.Count >= _options.Capacity)
-        {
-            _waitlist.Add(new WaitlistEntry(normalizedLearnerId, _nextSequence++));
-            return new EnrollResult(EnrollOutcome.Waitlisted, _waitlist.Count);
-        }
-
-        _enrolled.Add(normalizedLearnerId);
-        return new EnrollResult(EnrollOutcome.Enrolled, null);
     }
 
     public DropResult Drop(string? learnerId)
     {
-        var normalizedLearnerId = NormalizeLearnerId(learnerId);
-        if (normalizedLearnerId is null)
+        lock (_gate)
         {
-            return new DropResult(DropOutcome.InvalidRequest, Array.Empty<string>());
-        }
+            var normalizedLearnerId = NormalizeLearnerId(learnerId);
+            if (normalizedLearnerId is null)
+            {
+                return new DropResult(DropOutcome.InvalidRequest, Array.Empty<string>());
+            }
 
-        var enrolledIndex = _enrolled.FindIndex(
-            enrolledLearnerId => StringComparer.OrdinalIgnoreCase.Equals(enrolledLearnerId, normalizedLearnerId));
-        if (enrolledIndex >= 0)
-        {
-            _enrolled.RemoveAt(enrolledIndex);
-            return new DropResult(DropOutcome.Dropped, FillFreeSeats());
-        }
+            var enrolledIndex = _enrolled.FindIndex(
+                enrolledLearnerId => StringComparer.OrdinalIgnoreCase.Equals(enrolledLearnerId, normalizedLearnerId));
+            if (enrolledIndex >= 0)
+            {
+                _enrolled.RemoveAt(enrolledIndex);
+                return new DropResult(DropOutcome.Dropped, FillFreeSeats());
+            }
 
-        var waitlistIndex = _waitlist.FindIndex(
-            entry => StringComparer.OrdinalIgnoreCase.Equals(entry.LearnerId, normalizedLearnerId));
-        if (waitlistIndex >= 0)
-        {
-            _waitlist.RemoveAt(waitlistIndex);
-            return new DropResult(DropOutcome.RemovedFromWaitlist, Array.Empty<string>());
-        }
+            var waitlistIndex = _waitlist.FindIndex(
+                entry => StringComparer.OrdinalIgnoreCase.Equals(entry.LearnerId, normalizedLearnerId));
+            if (waitlistIndex >= 0)
+            {
+                _waitlist.RemoveAt(waitlistIndex);
+                return new DropResult(DropOutcome.RemovedFromWaitlist, Array.Empty<string>());
+            }
 
-        return new DropResult(DropOutcome.NotEnrolled, Array.Empty<string>());
+            return new DropResult(DropOutcome.NotEnrolled, Array.Empty<string>());
+        }
     }
 
     public OfferingSnapshot GetSnapshot()
     {
-        return new OfferingSnapshot(
-            _options.Id,
-            _options.CourseCode,
-            _options.Capacity,
-            _enrolled.ToArray(),
-            _waitlist
-                .OrderBy(entry => entry.Sequence)
-                .Select(entry => entry.LearnerId)
-                .ToArray());
+        lock (_gate)
+        {
+            return new OfferingSnapshot(
+                _options.Id,
+                _options.CourseCode,
+                _options.Capacity,
+                _enrolled.ToArray(),
+                _waitlist
+                    .OrderBy(entry => entry.Sequence)
+                    .Select(entry => entry.LearnerId)
+                    .ToArray());
+        }
     }
 
     private static string? NormalizeLearnerId(string? learnerId)
