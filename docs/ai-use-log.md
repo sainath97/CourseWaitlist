@@ -286,3 +286,25 @@ Run dotnet build, then dotnet test (all tests), quote the real output, STOP, lis
 - Review notes: check order is validation, duplicates, eligibility, capacity (required by T-23 and T-60); waitlist position derived from list index, not Count; first-seen casing preserved; no Drop, lock or FillFreeSeats code added early; no tests edited.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [32 passed]; `git diff --stat` -> [only EnrollmentService.cs]
 - Commit: `feat(core): make duplicate enrollments idempotent`
+
+### Entry 15: C6 Phase 1, drop tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C6 (drop, without promotion). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/DropTests.cs. Touch nothing else, including TestServiceBuilder.cs and all production files.
+Implement T-25, T-26, T-27, T-28 and T-29 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use the existing TestServiceBuilder (WithCapacity, WithPrerequisite, ExpectedSnapshot), ShouldMatch and AssertInvariants. Add [Trait("Slice","C6")] and [Trait("Case","T-xx")] to every test. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments. Assert the OUTCOME first, then the snapshot. Use no prerequisite in any test.
+Write exactly these 6 tests:
+1. T-25: capacity 1. Enroll A. Drop A returns Dropped and PromotedLearnerIds is empty. Snapshot enrolled and waitlist both empty. Then Enroll B returns Enrolled (the seat is reusable) and the snapshot enrolled is ["B"].
+2. T-26: capacity 2. Enroll A. Drop Z (never enrolled) returns NotEnrolled and PromotedLearnerIds is empty. Snapshot enrolled ["A"], waitlist empty (unchanged).
+3. T-27: capacity 2. Enroll A. Drop A returns Dropped. Take a snapshot. Drop A again returns NotEnrolled with an empty PromotedLearnerIds; the second snapshot ShouldMatch the first.
+4. T-28: capacity 1. Enroll A (Enrolled), B (Waitlisted position 1), C (Waitlisted position 2). Drop B returns RemovedFromWaitlist with an empty PromotedLearnerIds. Snapshot enrolled ["A"], waitlist ["C"]. Then Enroll C again returns AlreadyWaitlisted with position 1 (positions shifted).
+5. T-29 (enrolled variant): capacity 2. Enroll "Alice". Drop "  ALICE " returns Dropped. Snapshot enrolled empty.
+6. T-29 (waitlisted variant): capacity 1. Enroll A, then "Bob" (Waitlisted position 1). Drop " bob " returns RemovedFromWaitlist. Snapshot enrolled ["A"], waitlist empty.
+IMPORTANT: no test may Drop an enrolled learner while the waitlist is non-empty. Promotion belongs to slice C7.
+Run dotnet build, then dotnet test, and quote the real output. Expected: all 6 new tests FAIL with NotImplementedException thrown from Drop; the existing 32 tests still pass. Report any other failure reason or any new test that passes, and do not delete or change it. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added DropTests with six tests (T-25, T-26, T-27, T-28, T-29 x2). Run: 6 failed with NotImplementedException from Drop, 32 passed, total 38; build clean.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: no test drops an enrolled learner while the waitlist is non-empty (promotion belongs to C7); later assertions (seat reuse, position shift) only become effective after Phase 2. No unexpectedly passing tests.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C6` -> [6 failed at the Drop stub]; `git diff --stat` -> [only the new test file]
+- Commit: `test(core): add C6 drop tests`
