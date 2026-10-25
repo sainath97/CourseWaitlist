@@ -23,4 +23,14 @@ public static class InvariantAssertions
             .Should()
             .Be(snapshot.Waitlist.Count);
     }
+
+    public static void AssertNoFreeSeatBesideEligibleWaiter(
+        OfferingSnapshot snapshot,
+        Func<string, bool> isEligible)
+    {
+        if (snapshot.Enrolled.Count < snapshot.Capacity)
+        {
+            snapshot.Waitlist.Where(isEligible).Should().BeEmpty();
+        }
+    }
 }
