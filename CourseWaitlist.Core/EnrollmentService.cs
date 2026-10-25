@@ -17,22 +17,53 @@ public class EnrollmentService
 
     public EnrollmentService(OfferingOptions options, ILearnerRecords records)
     {
+        if (options.Capacity < 1)
+        {
+            throw new ArgumentException("Offering capacity must be at least 1.", nameof(options));
+        }
+
         _options = options;
         _records = records;
     }
 
     public EnrollResult Enroll(string? learnerId)
     {
+        if (NormalizeLearnerId(learnerId) is null)
+        {
+            return new EnrollResult(EnrollOutcome.InvalidRequest, null);
+        }
+
         throw new NotImplementedException();
     }
 
     public DropResult Drop(string? learnerId)
     {
+        if (NormalizeLearnerId(learnerId) is null)
+        {
+            return new DropResult(DropOutcome.InvalidRequest, Array.Empty<string>());
+        }
+
         throw new NotImplementedException();
     }
 
     public OfferingSnapshot GetSnapshot()
     {
-        throw new NotImplementedException();
+        return new OfferingSnapshot(
+            _options.Id,
+            _options.CourseCode,
+            _options.Capacity,
+            Array.Empty<string>(),
+            Array.Empty<string>());
+    }
+
+    private static string? NormalizeLearnerId(string? learnerId)
+    {
+        if (learnerId is null)
+        {
+            return null;
+        }
+
+        var normalized = learnerId.Trim();
+        return normalized.Length is > 0 and <= 64 ? normalized : null;
     }
 }

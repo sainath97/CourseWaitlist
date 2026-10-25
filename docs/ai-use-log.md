@@ -123,3 +123,20 @@ Run dotnet build, then dotnet test, and quote the real output. Expected failures
 - What I changed: added [Trait("Case","T-xx")] traits by hand; added T-63 to the test plan for the extra GetSnapshot test.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C1` -> [12 failed, reasons checked]; `git status` -> [only test files].
 - Commit: `test(core): add C1 validation tests`
+
+### Entry 6: C1 Phase 2, validation implementation (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C1. You may edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C1 tests:
+- The constructor throws ArgumentException when options.Capacity < 1.
+- A private normalizer: Trim(); null, empty, whitespace or length > 64 is invalid.
+- Enroll returns EnrollResult(EnrollOutcome.InvalidRequest, null) and Drop returns DropResult(DropOutcome.InvalidRequest, an empty list) for invalid ids.
+- GetSnapshot returns OfferingSnapshot with the options' Id, CourseCode and Capacity and empty Enrolled and Waitlist lists (no state exists yet).
+- Enroll and Drop for VALID ids stay NotImplementedException. No locking.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: capacity check in the constructor, a private learner-id normalizer, InvalidRequest results for invalid ids, and a GetSnapshot that returns the configured offering with empty lists. Valid Enroll/Drop remain NotImplemented. Build clean; 12 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: constructor throws ArgumentException exactly; trim-then-length matches the spec; no test files were edited; GetSnapshot currently returns Array.Empty, so C2 must replace it with real copies.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [12 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): implement C1 enrollment validation`
