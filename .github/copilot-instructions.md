@@ -9,6 +9,9 @@
 - Phase 1 may only add or edit files in CourseWaitlist.Tests that I name. If a new test unexpectedly passes before implementation, report it and explain; do not delete it.
 - "Expected reason" means a NotImplementedException from a stub, or an assertion failure on the behavior under test. A compile error or unrelated exception is NOT an expected reason.
 - Do not run git commands that change the repository (commit, add, push, reset, checkout, stash). Read-only git (status, diff) is fine.
+- Run every command with the repository root (the folder containing CourseWaitlist.slnx) as the working directory; verify it before running dotnet new or any delete. Never create, modify or delete anything outside the repository root.
+- Do not delete files I did not name. If a template generates files I did not list, leave them and tell me.
+- Quote the actual build and test output (counts and key lines), not a paraphrase. Run build and test sequentially, never in parallel.
 
 # Stack
 - C# on net10.0. Nullable enabled, implicit usings, file-scoped namespaces, TreatWarningsAsErrors.
