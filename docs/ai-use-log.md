@@ -576,3 +576,20 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: both ne
 - Review notes: T-57 asserts empty arrays are present, FIFO order after enrollments, and the post-promotion state; I traced the final expected state against the service. Strict problem+json assertions used. No production files touched.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=A3` -> [2 failed]; `git diff --stat` -> [only the new test file]
 - Commit: `test(api): add A3 snapshot endpoint tests`
+
+### Entry 30: A3 Phase 2, GET snapshot endpoint (Copilot Agent mode)\
+- Prompt (sanitized):
+Phase 2. Slice A3. Files you may edit: CourseWaitlist.Api/Endpoints/EnrollmentEndpoints.cs and CourseWaitlist.Api/Contracts/ApiContracts.cs. Touch nothing else, including Program.cs. Do not edit any test; if you believe a test must change, stop and tell me. Implement ONLY the GET endpoint. Minimum to pass the A3 tests:
+- ApiContracts.cs: add `public sealed record SnapshotResponse(string OfferingId, string CourseCode, int Capacity, IReadOnlyList<string> Enrolled, IReadOnlyList<string> Waitlist);`. Leave the existing records unchanged.
+- EnrollmentEndpoints.cs: on the existing `offerings` group variable add offerings.MapGet("", handler) so the route is exactly /offerings/{offeringId}. If an empty route pattern is not accepted by the group in this framework version, use MapGet("/", ...) and tell me. The handler takes: string offeringId, EnrollmentService service, IOptions<OfferingOptions> options.
+- Handler order: (1) if offeringId does not equal options.Value.Id with StringComparison.OrdinalIgnoreCase, return Results.Problem(statusCode: 404, title: "Offering not found"); (2) var snapshot = service.GetSnapshot(); return Results.Json(new SnapshotResponse(snapshot.OfferingId, snapshot.CourseCode, snapshot.Capacity, snapshot.Enrolled, snapshot.Waitlist), statusCode: 200). The arrays are never null, so both properties are always in the JSON, including when empty.
+- This is a read-only endpoint: do not log, do not mutate anything, and do not change the POST or DELETE handlers.
+No locking, no new packages, no other endpoints.
+Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added SnapshotResponse to ApiContracts.cs and a read-only GET route on the offerings group (offering check, then GetSnapshot). Build clean; 73 passed, 0 failed.
+- Decision: Accepted
+- What I changed: [nothing]
+- Review notes: I diffed both files against their previous versions; the change is additive only, POST and DELETE handlers are byte-identical; arrays are never null so both properties always appear; empty route pattern works in this framework version (T-57 passes).
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [69 passed]; `git diff --stat` -> [two files]
+- Commit: `feat(api): add offering snapshot GET endpoint`

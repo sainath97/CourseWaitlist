@@ -11,6 +11,27 @@ public static class EnrollmentEndpoints
     public static IEndpointRouteBuilder MapEnrollmentEndpoints(this IEndpointRouteBuilder app)
     {
         var offerings = app.MapGroup("/offerings/{offeringId}");
+        offerings.MapGet("", (
+            string offeringId,
+            EnrollmentService service,
+            IOptions<OfferingOptions> options) =>
+        {
+            if (!string.Equals(offeringId, options.Value.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Problem(statusCode: 404, title: "Offering not found");
+            }
+
+            var snapshot = service.GetSnapshot();
+            return Results.Json(
+                new SnapshotResponse(
+                    snapshot.OfferingId,
+                    snapshot.CourseCode,
+                    snapshot.Capacity,
+                    snapshot.Enrolled,
+                    snapshot.Waitlist),
+                statusCode: 200);
+        });
+
         offerings.MapPost("/enrollments", (
                 string offeringId,
                 EnrollRequest? request,
