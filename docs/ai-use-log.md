@@ -557,3 +557,22 @@ Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, 
 - Review notes: POST behavior unchanged (A1 tests still green); Program.cs and ApiContracts.cs untouched; no tests edited. Possible follow-up: the offering check is duplicated across handlers.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [67 passed]; manual DELETE smoke test -> [result]; `git diff --stat` -> [one file]
 - Commit: `feat(api): add enrollment drop endpoint`
+
+### Entry 29: A3 Phase 1, GET snapshot endpoint tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice A3 (GET /offerings/{offeringId}). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/Api/SnapshotEndpointTests.cs. Touch nothing else, including ApiFactory.cs and all production files. Define your own small private helpers inside the new file.
+Implement T-57 and T-58 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Do not reference any type from CourseWaitlist.Api; read bodies with ReadFromJsonAsync<JsonElement>(). Create `using var factory = ...` and the client INSIDE each test. Add [Trait("Slice","A3")] and [Trait("Case","T-xx")]. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments.
+Contract to assert (docs/design-spec.md section 3): GET response is JSON with camelCase properties offeringId, courseCode, capacity, enrolled (array of learner ids) and waitlist (array of learner ids in FIFO order). Both arrays are always present, empty when there is nothing to list. ProblemDetails responses must be asserted strictly: ContentType.Should().NotBeNull() first, then ContentType!.MediaType equals "application/problem+json", then the body `status`. Never use the null-conditional on ContentType.
+Write exactly these 2 tests:
+1. T-57: use `new ApiFactory(new Dictionary<string, string?> { ["LearnerRecords:learner-005:0"] = "CS101" })` (capacity 2, prerequisite CS101; learner-001, learner-002, learner-003 and learner-005 completed it). Step 1: GET /offerings/CS201-TEST -> 200; offeringId "CS201-TEST"; courseCode "CS201"; capacity 2; enrolled is an empty array; waitlist is an empty array. Step 2: POST (to /offerings/CS201-TEST/enrollments with {"learnerId":"..."}) learner-001 and learner-002 (assert 201 each), then learner-003 and learner-005 (assert 202 each). Step 3: GET again -> 200; enrolled equals ["learner-001","learner-002"] in that order; waitlist equals ["learner-003","learner-005"] in that order. Step 4: DELETE /offerings/CS201-TEST/enrollments/learner-001 (assert 200), then GET -> enrolled equals ["learner-002","learner-003"]; waitlist equals ["learner-005"].
+2. T-58: GET /offerings/UNKNOWN -> 404 with the strict problem+json assertions and body status 404.
+Do not test POST or DELETE responses beyond the setup status assertions.
+Run dotnet build, then dotnet test, and quote the real output. Expected: both new tests FAIL on assertions (T-57 at its FIRST GET: status 404 found where 200 is expected; T-58 at the ContentType NotBeNull check), not on compile errors and not during the POST or DELETE setup; the existing 71 tests still pass. Report any other failure reason or any new test that passes, and do not delete or change it. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added SnapshotEndpointTests (T-57, T-58). Run: 2 failed, 71 passed, total 73; build clean. T-57 failed at the first GET (404 found, 200 expected); T-58 failed at the strict Content-Type NotBeNull check.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: T-57 asserts empty arrays are present, FIFO order after enrollments, and the post-promotion state; I traced the final expected state against the service. Strict problem+json assertions used. No production files touched.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=A3` -> [2 failed]; `git diff --stat` -> [only the new test file]
+- Commit: `test(api): add A3 snapshot endpoint tests`
