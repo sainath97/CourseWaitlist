@@ -359,3 +359,24 @@ Run dotnet build, then dotnet test (all tests), quote the real output, STOP, lis
 - Review notes: single call site; no eligibility check inside FillFreeSeats; Enroll unchanged; no lock; no tests edited. Known intermediate state: promotion ignores eligibility and Enroll does not reconcile free seats until C8; T-33 to T-38 are planned and must fail first.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [42 passed]; `git diff --stat` -> [only EnrollmentService.cs]
 - Commit: `feat(core): promote waitlisted learners on drop`
+
+### Entry 19: C8 Phase 1, eligibility during promotion tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C8 (eligibility during promotion: skip and retain, no queue jumping). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/PromotionEligibilityTests.cs. Touch nothing else, including TestServiceBuilder.cs, InvariantAssertions.cs and all production files.
+Implement T-33, T-34, T-35, T-36, T-37 and T-38 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use TestServiceBuilder (WithCapacity, WithPrerequisite, WithCompleted, Records, ExpectedSnapshot), ShouldMatch and AssertInvariants. Add [Trait("Slice","C8")] and [Trait("Case","T-xx")] to every test. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments. Assert outcomes first (use .Should().Equal(...) for PromotedLearnerIds), then snapshots. Every test uses capacity 1, WithPrerequisite("CS101"), and changes eligibility with builder.Records.Remove(learnerId, "CS101") and builder.Records.Add(learnerId, "CS101") AFTER learners joined. Do not use concurrency.
+Write exactly these 6 tests. Assert EVERY intermediate step listed; do not skip any, because later steps could pass for the wrong reason:
+1. T-33: A, B, C completed CS101. Enroll A (Enrolled), B (Waitlisted 1), C (Waitlisted 2). Remove B's CS101. Drop A returns Dropped with PromotedLearnerIds ["C"] (B skipped). Snapshot enrolled ["C"], waitlist ["B"].
+2. T-34: A, B, C, D completed. Enroll A, B, C, D. Remove B's CS101. Drop A returns Dropped with PromotedLearnerIds ["C"]; snapshot enrolled ["C"], waitlist ["B","D"]. Add B's CS101 back. Drop C returns Dropped with PromotedLearnerIds ["B"]; snapshot enrolled ["B"], waitlist ["D"].
+3. T-35: A, B completed. Enroll A, B (Waitlisted 1). Remove B's CS101. Drop A returns Dropped with EMPTY PromotedLearnerIds. Snapshot enrolled empty, waitlist ["B"] (seat stays free).
+4. T-36: A, B, C completed. Enroll A, B (Waitlisted 1). Remove B's CS101. Drop A returns Dropped with EMPTY PromotedLearnerIds; snapshot enrolled empty, waitlist ["B"]. Add B's CS101 back. Enroll C returns Waitlisted with position 1 (NOT Enrolled). Snapshot enrolled ["B"], waitlist ["C"].
+5. T-37: A, B completed. Enroll A, B (Waitlisted 1). Remove B's CS101. Drop A returns Dropped with EMPTY PromotedLearnerIds; snapshot enrolled empty, waitlist ["B"]. Add B's CS101 back. Enroll B returns AlreadyEnrolled with null WaitlistPosition. Snapshot enrolled ["B"], waitlist empty.
+6. T-38: A, B completed; C has NOT completed CS101. Enroll A, B (Waitlisted 1). Remove B's CS101. Drop A returns Dropped with EMPTY PromotedLearnerIds; snapshot enrolled empty, waitlist ["B"]. Add B's CS101 back. Enroll C returns PrerequisiteNotMet with null WaitlistPosition. Snapshot enrolled ["B"], waitlist empty (C is in neither list).
+Run dotnet build, then dotnet test, and quote the real output. Expected: all 6 new tests FAIL on assertions (for example PromotedLearnerIds expected empty or ["C"] but found ["B"]), not on NotImplementedException and not on compile errors; the existing 42 tests still pass. If any new test passes, report it explicitly and do not delete or change it. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added PromotionEligibilityTests with six tests (T-33 to T-38). Run: 6 failed on assertions (ineligible head waiter B was promoted), 42 passed, total 48; build clean.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: I required every intermediate state to be asserted (seat free with the skipped waiter retained) so T-37 and T-38 could not pass by accident; traced each test against the intended FillFreeSeats-first behavior. T-36 to T-38 encode the free-seat defect found during spec review. No unexpectedly passing tests; no production files touched.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C8` -> [6 failed, all at the first Drop]; `git diff --stat` -> [only the new test file]
+- Commit: `test(core): add C8 promotion eligibility tests`
