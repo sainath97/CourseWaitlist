@@ -45,12 +45,12 @@ Mutation response shape: `{ "outcome": "...", "learnerId": "...", "waitlistPosit
 - A learner is never both enrolled and waitlisted.
 - Neither list contains duplicate learner IDs, compared case-insensitively.
 - Waitlist entries are in strictly ascending sequence order.
-- After every `Enroll` that passes validation, and every `Drop` that removes a learner, a free seat and a currently eligible waitlisted learner do not coexist. `InvalidRequest` and `NotEnrolled` are pure no-ops and do not reconcile state.
+- After every validated Enroll and every Drop of an enrolled learner, a free seat and a currently eligible waitlisted learner do not coexist. InvalidRequest, NotEnrolled and a Drop of a waitlisted learner do not reconcile free seats; seats are reconciled at the next validated Enroll or enrolled-learner Drop.
 
 ## 5. Rules
 
 - **Enroll:** Validate the request (`InvalidRequest` otherwise). Call `FillFreeSeats()` so any free seat goes to an eligible waiter first. Then return `AlreadyEnrolled` or `AlreadyWaitlisted` (current 1-based position) for an existing learner. Then check eligibility; if the prerequisite is unmet, return `PrerequisiteNotMet` without adding the learner. Otherwise enroll the learner if a seat is free, or append them to the waitlist and return `Waitlisted` with a 1-based position.
-- **Drop:** If enrolled, remove the learner, call `FillFreeSeats()`, and report promoted learner IDs. If waitlisted, remove them without promotion and return `RemovedFromWaitlist`. Otherwise return `NotEnrolled`.
+- **Drop:** If enrolled, remove the learner, call `FillFreeSeats()`, and report promoted learner IDs. If waitlisted, remove them without promotion (free seats are reconciled at the next validated Enroll or enrolled-learner Drop) and return `RemovedFromWaitlist`. Otherwise return `NotEnrolled`.
 - **`FillFreeSeats()`** (private): While a seat is free, scan from the waitlist head and promote the first learner eligible at that time. Skip but retain ineligible entries in their original positions; re-check them on each later promotion.
 
 ## 6. Concurrency
@@ -71,6 +71,7 @@ Built in small test-first slices; locking is added in the final concurrency slic
 - There is no background re-scan when a learner becomes eligible. Re-evaluation occurs during a later promotion attempt.
 - O(n) list lookups and an unbounded waitlist are acceptable at this scale.
 - Duplicate enrollment requests are idempotent by state and do not create records or change state.
-- Eligibility can change between operations because `ILearnerRecords` is mutable; the service reconciles free seats at the start of the next Enroll or after the next Drop that removes someone.
-- Promotions triggered inside Enroll are not included in the Enroll response.
+- Eligibility can change between operations because `ILearnerRecords` is mutable; the service reconciles free seats at the next validated Enroll or enrolled-learner Drop.
+- A Drop of a waitlisted learner does not reconcile free seats; a skipped waiter who regains eligibility is promoted at the next validated Enroll or enrolled-learner Drop.
+- Promotions triggered inside Enroll are not reported in the Enroll response; they are visible through GetSnapshot.
 - The service stores the trimmed learner id exactly as first submitted; matching is case-insensitive, so later requests with different casing refer to the same learner.

@@ -7,7 +7,7 @@ namespace CourseWaitlist.Core;
 /// <item>A learner is never both enrolled and waitlisted.</item>
 /// <item>Neither list contains duplicate learner IDs, compared case-insensitively.</item>
 /// <item>Waitlist entries are in strictly ascending sequence order.</item>
-/// <item>After every valid Enroll and every Drop that removes a learner, a free seat and a currently eligible waitlisted learner do not coexist.</item>
+/// <item>After every validated Enroll and every Drop of an enrolled learner, a free seat and a currently eligible waitlisted learner do not coexist. InvalidRequest, NotEnrolled and a Drop of a waitlisted learner do not reconcile free seats; seats are reconciled at the next validated Enroll or enrolled-learner Drop.</item>
 /// </list>
 /// </summary>
 public class EnrollmentService
@@ -38,6 +38,8 @@ public class EnrollmentService
         {
             return new EnrollResult(EnrollOutcome.InvalidRequest, null);
         }
+
+        FillFreeSeats();
 
         var enrolledIndex = _enrolled.FindIndex(
             enrolledLearnerId => StringComparer.OrdinalIgnoreCase.Equals(enrolledLearnerId, normalizedLearnerId));
@@ -129,10 +131,16 @@ public class EnrollmentService
     private List<string> FillFreeSeats()
     {
         var promotedLearnerIds = new List<string>();
-        while (_enrolled.Count < _options.Capacity && _waitlist.Count > 0)
+        while (_enrolled.Count < _options.Capacity)
         {
-            var nextWaitlistEntry = _waitlist[0];
-            _waitlist.RemoveAt(0);
+            var eligibleIndex = _waitlist.FindIndex(entry => IsEligible(entry.LearnerId));
+            if (eligibleIndex < 0)
+            {
+                break;
+            }
+
+            var nextWaitlistEntry = _waitlist[eligibleIndex];
+            _waitlist.RemoveAt(eligibleIndex);
             _enrolled.Add(nextWaitlistEntry.LearnerId);
             promotedLearnerIds.Add(nextWaitlistEntry.LearnerId);
         }

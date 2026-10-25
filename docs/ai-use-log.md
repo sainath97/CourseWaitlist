@@ -380,3 +380,19 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: all 6 n
 - Review notes: I required every intermediate state to be asserted (seat free with the skipped waiter retained) so T-37 and T-38 could not pass by accident; traced each test against the intended FillFreeSeats-first behavior. T-36 to T-38 encode the free-seat defect found during spec review. No unexpectedly passing tests; no production files touched.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C8` -> [6 failed, all at the first Drop]; `git diff --stat` -> [only the new test file]
 - Commit: `test(core): add C8 promotion eligibility tests`
+
+### Entry 20: C8 Phase 2, skip-and-retain promotion (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C8. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Do not change the XML-doc or other comments. Minimum to pass the C8 tests:
+- Change FillFreeSeats: while _enrolled.Count < _options.Capacity, find the FIRST waitlist entry (lowest index) whose learner IsEligible right now; if there is none, stop; otherwise remove that entry from _waitlist, add its LearnerId to _enrolled and record the id. Ineligible entries are skipped WITHOUT being removed, reordered, or having their Sequence changed. Return the promoted ids in promotion order. The loop must always terminate.
+- In Enroll, call FillFreeSeats() immediately after validation succeeds and BEFORE the enrolled and waitlist duplicate checks; ignore its return value.
+- Keep Drop calling FillFreeSeats only in the branch that just removed an ENROLLED learner. Do NOT call it in the waitlist-removal or NotEnrolled branches.
+- Keep the order of the remaining Enroll checks unchanged: duplicates, eligibility, capacity. No locking and no other refactoring.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: FillFreeSeats now promotes the first currently eligible waiter, leaving ineligible entries in place; Enroll calls FillFreeSeats right after validation and before the duplicate checks; Drop still reconciles only after removing an enrolled learner. Build clean; 48 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: two call sites for FillFreeSeats; skipped entries keep index and Sequence; loop terminates; no lock; no tests edited; XML-doc left untouched as instructed. Design finding: invariant 5 holds after every validated Enroll and every enrolled-learner Drop, but not after a Drop of a waitlisted learner; the invariant wording says "every Drop that removes a learner", which is too strong. Fixed in a separate docs step.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [48 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): skip ineligible waiters during promotion`
