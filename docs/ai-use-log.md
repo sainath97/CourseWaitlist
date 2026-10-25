@@ -211,3 +211,22 @@ Run dotnet build, then dotnet test (all tests), quote the real output, STOP, lis
 - Review notes: eligibility is evaluated before capacity, as the spec requires and slice C4 relies on; no state change on the ineligible path; no duplicate, waitlist or lock code added early; no tests edited.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [20 passed]; `git diff --stat` -> [only EnrollmentService.cs]
 - Commit: `feat(core): enforce enrollment prerequisites`
+
+### Entry 11: C4 Phase 1, waitlist tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C4 (join the waitlist when full). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/EnrollmentWaitlistTests.cs. Touch nothing else, including TestServiceBuilder.cs and all production files.
+Implement T-16, T-17, T-18 and T-19 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use the existing TestServiceBuilder (WithCapacity, WithPrerequisite, WithCompleted, ExpectedSnapshot), ShouldMatch and AssertInvariants. Add [Trait("Slice","C4")] and [Trait("Case","T-xx")] to every test. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments. Call AssertInvariants after every enroll call that has a snapshot taken.
+- T-16: capacity 1, no prerequisite. Enroll A returns Enrolled; Enroll B returns Waitlisted with WaitlistPosition 1. Snapshot: enrolled ["A"], waitlist ["B"].
+- T-17: capacity 1, no prerequisite. Enroll A, B, C, D in order. A is Enrolled; B, C, D are Waitlisted with positions 1, 2, 3. Snapshot: enrolled ["A"], waitlist ["B","C","D"] in that order.
+- T-18: capacity 1, prerequisite "CS101"; A has completed CS101 and B has not (seed with WithCompleted). Enroll A returns Enrolled. Enroll B returns PrerequisiteNotMet with a null WaitlistPosition. Snapshot: enrolled ["A"], waitlist empty.
+- T-19: capacity 2, no prerequisite. Enroll 5 distinct learners in order. The first two return Enrolled with null positions; the next three return Waitlisted with positions 1, 2, 3. After EVERY call, call AssertInvariants and assert the snapshot's enrolled count is never above 2. Final snapshot: enrolled has exactly 2 entries, waitlist exactly 3, in enrollment order.
+Do not use Drop, duplicates, promotion or concurrency in this slice.
+Run dotnet build, then dotnet test, and quote the real output. Expected: T-16, T-17 and T-19 fail with NotImplementedException from Enroll (the full-capacity stub); T-18 may already PASS because eligibility is checked before capacity; if so, report that explicitly and do not delete or change it. Report any other failure reason. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added EnrollmentWaitlistTests (T-16, T-17, T-18, T-19). Run: 3 failed with NotImplementedException from the full-capacity path, 21 passed, total 24; build clean.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: T-18 passed early because eligibility is checked before capacity; kept on purpose as a guard that ineligible learners never reach the waitlist. Positions and snapshot lists are asserted exactly; no production files touched.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C4` -> [3 failed at the Enroll stub, 1 passed]; `git diff --stat` -> [only the new test file]
+- Commit: `test(core): add C4 waitlist tests`
