@@ -516,3 +516,24 @@ Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, 
 - Review notes: offering check precedes Enroll; body parameter is nullable so empty bodies reach validation; 404/422/400 use Results.Problem. Follow-ups for limitations: response echoes the trimmed request id (not stored casing); user-supplied ids are logged without a length limit; malformed JSON and unsupported content types are not covered by tests.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [63 passed]; manual POSTs against the demo config -> [201 then 422]; `git diff --stat` -> [expected files only]
 - Commit: `feat(api): add enrollment POST endpoint`
+
+### Entry 27: A2 Phase 1, DELETE endpoint tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice A2 (DELETE /offerings/{offeringId}/enrollments/{learnerId}). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/Api/DropEndpointTests.cs. Touch nothing else, including ApiFactory.cs, EnrollEndpointTests.cs and all production files. Define your own small private helpers inside the new file.
+Implement T-53, T-54, T-55, T-56 and T-62 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use ApiFactory (default configuration: offering CS201-TEST, capacity 2, prerequisite CS101; learner-001, learner-002, learner-003 completed it; learner-004 did not). Create `using var factory = new ApiFactory();` and `factory.CreateClient()` INSIDE each test. Do not reference any type from CourseWaitlist.Api; read bodies with ReadFromJsonAsync<JsonElement>(). Set up state by POSTing to /offerings/CS201-TEST/enrollments with {"learnerId":"..."}. Add [Trait("Slice","A2")] and [Trait("Case","T-xx")]. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments.
+Contract to assert: drop responses return JSON with `outcome` (string), `learnerId`, and ALWAYS a `promotedLearnerIds` array (empty when nobody was promoted); `waitlistPosition` is absent. ProblemDetails responses must be asserted strictly: ContentType.Should().NotBeNull() first, then ContentType!.MediaType equals "application/problem+json", then the body `status`. Never use the null-conditional on ContentType.
+Write exactly these 5 tests:
+1. T-53: POST learner-001, learner-002 (both Enrolled) and learner-003 (Waitlisted). DELETE /offerings/CS201-TEST/enrollments/learner-001 -> 200; outcome "Dropped"; learnerId "learner-001"; promotedLearnerIds equals ["learner-003"].
+2. T-54: POST learner-001. DELETE it -> 200 "Dropped". DELETE it again -> 200; outcome "NotEnrolled"; promotedLearnerIds is an empty array.
+3. T-55: POST learner-001, learner-002, learner-003 (waitlisted). DELETE learner-003 -> 200; outcome "RemovedFromWaitlist"; promotedLearnerIds is an empty array. Then DELETE learner-001 -> 200 "Dropped" with promotedLearnerIds an empty array (the removed waiter is not promoted).
+4. T-56: DELETE /offerings/UNKNOWN/enrollments/learner-001 -> 404 with the strict problem+json assertions and body status 404.
+5. T-62: POST learner-001 (Enrolled). DELETE /offerings/CS201-TEST/enrollments/%20 -> 400 with the strict problem+json assertions, body status 400 and outcome "InvalidRequest". Then POST learner-001 again -> 200 "AlreadyEnrolled" (proves the invalid DELETE changed nothing).
+Do not test GET in this slice.
+Run dotnet build, then dotnet test, and quote the real output. Expected: all 5 new tests FAIL on assertions at the DELETE call (status 404 found where 200 or 400 is expected; T-56 fails at the ContentType NotBeNull check), not on compile errors, and not during the POST setup; the existing 66 tests still pass. Report any other failure reason or any new test that passes, and do not delete or change it. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added DropEndpointTests (T-53, T-54, T-55, T-56, T-62). Run: 5 failed, 66 passed, total 71. T-53/54/55/62 failed at the DELETE status (404 instead of 200 or 400); T-56 failed at the strict Content-Type NotBeNull assertion. Setup POSTs were asserted and succeeded. Copilot moved the repeat POST in T-62 before the DELETE assertions so the state check runs while DELETE is still unimplemented.
+- Decision: Accepted
+- Review finding: the first build ran with 5 MSB3026 warnings because an API process from my manual smoke test was still running and locking the DLL. I stopped it and re-ran with -warnaserror.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=A2` -> [5 failed]; `git diff --stat` -> [only the new test file]
+- Commit: `test(api): add A2 drop endpoint tests`
