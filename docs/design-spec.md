@@ -27,6 +27,8 @@ GET response: { "offeringId", "courseCode", "capacity", "enrolled": [learnerIds]
 
 Mutation response shape: `{ "outcome": "...", "learnerId": "...", "waitlistPosition": 1, "promotedLearnerIds": [] }`. Optional fields are omitted when not applicable. Serialize outcome enums as strings.
 
+Enroll responses never include promotedLearnerIds. Drop responses always include promotedLearnerIds (an empty array when nobody was promoted) and never include waitlistPosition. The GET response always includes both the enrolled and waitlist arrays, empty when there is nothing to list.
+
 | Outcome | HTTP |
 |---|---:|
 | `Enrolled` | 201 |
@@ -60,6 +62,8 @@ Use one private in-process lock to protect all service state and public operatio
 Supporting multiple offerings may require narrower coordination and a clear boundary for each offering’s state and operations. Supporting multiple service instances requires coordination across processes and shared state; an in-process lock alone cannot protect the invariants.
 
 Eligibility is evaluated inside the lock; this is acceptable because `ILearnerRecords` is in-memory, and a remote records service would need a different approach.
+
+Lock order: every public operation takes the service lock first; eligibility checks then call InMemoryLearnerRecords, which takes its own internal lock. The records type never calls back into the service, so the order is always service lock, then records lock, and the two cannot deadlock. GetSnapshot takes the same lock, so readers briefly block writers; snapshots are always consistent.
 
 ## 7. Delivery approach
 
