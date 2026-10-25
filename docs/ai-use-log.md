@@ -469,3 +469,26 @@ Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, 
 - Review notes: no eager configuration reads, so test overrides apply (T-43 shows the test id instead of the demo id); both record registrations resolve to one instance; template root endpoint intentionally left for A1; no csproj changes.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [passed]; `dotnet run` with the demo config -> [started]; with Offering__Capacity=0 -> [failed at startup with OptionsValidationException]
 - Commit: `feat(api): compose offering enrollment services`
+
+### Entry 25: A1 Phase 1, POST enroll endpoint tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice A1 (POST /offerings/{offeringId}/enrollments). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/Api/EnrollEndpointTests.cs. Touch nothing else, including ApiFactory.cs and all production files.
+Implement T-46 to T-52 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use ApiFactory (default configuration: offering CS201-TEST, capacity 2, prerequisite CS101; learner-001, learner-002 and learner-003 completed it; learner-004 did not). Create `using var factory = new ApiFactory();` and `factory.CreateClient()` INSIDE each test (fresh state per test). Do not reference any type from CourseWaitlist.Api; read bodies with ReadFromJsonAsync<JsonElement>() (System.Net.Http.Json). Post JSON with PostAsJsonAsync or StringContent("...", Encoding.UTF8, "application/json"). Add [Trait("Slice","A1")] and [Trait("Case","T-xx")]. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments. URL base: /offerings/CS201-TEST/enrollments.
+Response contract to assert (see docs/design-spec.md section 3): JSON properties are camelCase; enums serialize as strings; `outcome`, `learnerId`; `waitlistPosition` is present only when it applies and omitted otherwise; ProblemDetails responses use media type application/problem+json and contain `status`.
+Write these tests:
+1. T-46: POST {"learnerId":"learner-001"} -> 201; outcome "Enrolled"; learnerId "learner-001"; the property waitlistPosition is absent (TryGetProperty returns false).
+2. T-47: POST learner-001, learner-002, then learner-003 -> the third returns 202; outcome "Waitlisted"; waitlistPosition 1; learnerId "learner-003".
+3. T-48: POST learner-001 twice -> the second returns 200; outcome "AlreadyEnrolled".
+4. T-49: POST learner-001, learner-002, learner-003, then learner-003 again -> the repeat returns 200; outcome "AlreadyWaitlisted"; waitlistPosition 1.
+5. T-50: POST learner-004 -> 422; content type application/problem+json; body status 422 and outcome "PrerequisiteNotMet".
+6. T-51: a [Theory] with raw request bodies: "" (empty body sent with content type application/json), "{}", {"learnerId":null}, {"learnerId":""}, {"learnerId":"   "} -> each returns 400; content type application/problem+json; body status 400 and outcome "InvalidRequest".
+7. T-52: POST {"learnerId":"learner-001"} to /offerings/UNKNOWN/enrollments -> 404; content type application/problem+json; body status 404.
+Do not test DELETE or GET, and do not call any service type directly in this slice.
+Run dotnet build, then dotnet test, and quote the real output. Expected: ALL 11 new test cases FAIL on assertions (for example "Expected status 201 but found 404"; T-52 fails on the missing application/problem+json content type), not on compile errors; the existing 55 tests still pass. Report any other failure reason or any new test that passes, and do not delete or change it. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added EnrollEndpointTests (T-46 to T-52, 11 cases). The first build failed (JsonElement wrapped in a using); fixed in the new file. Copilot also added a body-presence assertion to T-52 after observing a JSON parse exception. Run: 11 failed, 55 passed, total 66.
+- Decision: Edited
+- Review finding: the content-type assertions in T-50, T-51 and T-52 used `?.`, which skips the assertion when the header is absent. Copilot said the unmapped route returned problem+json; the follow-up run showed T-52 failing with "ContentType not to be <null>", so the header was absent and the claim was unsupported. I replaced the three assertions with NotBeNull plus a media-type check. T-50 and T-51 fail at the status check, so their content-type assertions are only exercised once the endpoint exists.
+- Verification (my own runs): `dotnet test --filter Case=T-52` -> [message above]; `dotnet test --filter Slice!=C9` -> [11 failed, 41 passed]; `git diff --stat` -> [only the new test file]
+- Commit: `test(api): add A1 enroll endpoint tests`
