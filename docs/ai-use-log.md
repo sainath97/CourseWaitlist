@@ -451,3 +451,21 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: T-43 fa
 - Review notes: the failures prove the host starts with the template Program and the test configuration; overrides are applied after defaults; no endpoint tests in this slice; no production files touched.
 - Verification (my own runs): `dotnet test --filter Slice=A0` -> [3 failed, reasons checked]; `git diff --stat` -> [two test files]
 - Commit: `test(api): add A0 composition tests`
+
+### Entry 24: A0 Phase 2, API composition (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice A0. Files you may create or edit: CourseWaitlist.Api/Program.cs and CourseWaitlist.Api/appsettings.json (create it; the scaffold removed it). Touch nothing else, including the .csproj files. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the A0 tests, with NO endpoints:
+- Keep `public partial class Program { }` and leave the template's existing root endpoint as it is.
+- Bind OfferingOptions lazily: builder.Services.AddOptions<OfferingOptions>().BindConfiguration("Offering").Validate(o => !string.IsNullOrWhiteSpace(o.Id) && !string.IsNullOrWhiteSpace(o.CourseCode) && o.Capacity >= 1, "Offering requires Id, CourseCode and Capacity >= 1.").ValidateOnStart(). Do NOT read builder.Configuration eagerly anywhere in Program.cs, because test overrides are applied later.
+- Register InMemoryLearnerRecords as a singleton with a factory lambda: take IConfiguration from the service provider; for each child of the "LearnerRecords" section, treat the child's Key as the learner id and each of its children's Value as a completed course code (skip null values) and call records.Add(learnerId, courseCode). Also register ILearnerRecords to resolve to that same InMemoryLearnerRecords instance.
+- Register EnrollmentService as a singleton with a factory lambda: new EnrollmentService(sp.GetRequiredService<IOptions<OfferingOptions>>().Value, sp.GetRequiredService<ILearnerRecords>()).
+- appsettings.json demo values: Offering { Id: "CS201-2026-FALL", CourseCode: "CS201", Capacity: 2, PrerequisiteCourseCode: "CS101" }; LearnerRecords { "learner-001": ["CS101"], "learner-002": ["CS101"], "learner-003": ["CS101"], "learner-004": [] }; standard Logging section.
+No locking, no endpoints, no JSON options, no other packages.
+Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited Program.cs (lazy options binding with validation and ValidateOnStart, singleton learner records seeded from configuration, singleton EnrollmentService) and created appsettings.json with demo values. Build clean; 55 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: no eager configuration reads, so test overrides apply (T-43 shows the test id instead of the demo id); both record registrations resolve to one instance; template root endpoint intentionally left for A1; no csproj changes.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [passed]; `dotnet run` with the demo config -> [started]; with Offering__Capacity=0 -> [failed at startup with OptionsValidationException]
+- Commit: `feat(api): compose offering enrollment services`
