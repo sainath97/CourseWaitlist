@@ -35,6 +35,11 @@ public class EnrollmentService
             return new EnrollResult(EnrollOutcome.InvalidRequest, null);
         }
 
+        if (!IsEligible(normalizedLearnerId))
+        {
+            return new EnrollResult(EnrollOutcome.PrerequisiteNotMet, null);
+        }
+
         if (_enrolled.Count >= _options.Capacity)
         {
             throw new NotImplementedException();
@@ -73,5 +78,12 @@ public class EnrollmentService
 
         var normalized = learnerId.Trim();
         return normalized.Length is > 0 and <= 64 ? normalized : null;
+    }
+
+    private bool IsEligible(string learnerId)
+    {
+        var prerequisiteCourseCode = _options.PrerequisiteCourseCode;
+        return string.IsNullOrWhiteSpace(prerequisiteCourseCode)
+            || _records.HasCompleted(learnerId, prerequisiteCourseCode);
     }
 }

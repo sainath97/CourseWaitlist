@@ -196,3 +196,18 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: T-14 fa
 - Review notes: T-15 is an unexpectedly passing test, kept on purpose as a regression guard for eligible enrollment. T-14 never reached the full-capacity stub. No production or other test files changed.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Case=T-14` -> [failed on outcome assertion]; `--filter Case=T-15` -> [passed]; `git diff --stat` -> [only the new test file]
 - Commit: `test(core): add C3 prerequisite tests`
+
+### Entry 10: C3 Phase 2, prerequisite enforcement (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C3. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C3 tests:
+- Add a private IsEligible(string learnerId): returns true when options.PrerequisiteCourseCode is null, empty or whitespace; otherwise returns _records.HasCompleted(learnerId, options.PrerequisiteCourseCode).
+- In Enroll, immediately after validation and BEFORE the capacity check, return EnrollResult(EnrollOutcome.PrerequisiteNotMet, null) when the learner is not eligible. No state changes on that path.
+- Everything else stays as is: full-capacity path and valid Drop stay NotImplementedException; no duplicate handling, no waitlist, no locking.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: added a private IsEligible (true when no prerequisite is configured, else records.HasCompleted) and an early PrerequisiteNotMet return placed after validation and before the capacity check. Build clean; 20 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: eligibility is evaluated before capacity, as the spec requires and slice C4 relies on; no state change on the ineligible path; no duplicate, waitlist or lock code added early; no tests edited.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [20 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): enforce enrollment prerequisites`
