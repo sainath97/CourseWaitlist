@@ -51,6 +51,36 @@ Show the CLI commands you ran. Run `dotnet build` and report the real output. ST
   2. Deleted appsettings.json, appsettings.Development.json and excluded launchSettings.json, none of which I named. Accepted the outcome (appsettings is recreated in slice A0) but added a rule to the instructions file forbidding unnamed deletions and out-of-repo commands.
   3. Wrote Microsoft.AspNetCore.Mvc.Testing as a floating `10.0.*`; I pinned it to `10.0.13` by hand for reproducible builds.
   4. Summarized build/test output instead of quoting it; I ran the commands myself.
-- Verification (my own runs): `dotnet build CourseWaitlist.slnx -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [no tests available, expected]; `dotnet list package` -> FluentAssertions 7.2.0, Mvc.Testing 10.0.13, xUnit packages: 2.9.3; `git status` -> [clean / files listed].
-- Files / decisions informed: solution structure, `.github/copilot-instructions.md` (rule tightening), A0 slice (appsettings.json must now be created)
+- Verification (my own runs): `dotnet build CourseWaitlist.slnx -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [no tests available, expected]; `dotnet list package` -> FluentAssertions 7.2.0, Mvc.Testing 10.0.13, xUnit packages: 2.9.3; `git status` -> files listed.
+- Files / decisions informed: solution structure, `.github/copilot-instructions.md` (rule tightening)
 - Commits: `chore: scaffold course waitlist solution`; `docs: restrict copilot to repo root and named files; log scaffold`
+
+### Entry 3: Test plan (Copilot Chat, Ask mode)
+- Prompt (sanitized):
+From #design-spec.md produce the Markdown for docs/test-plan.md. Output it in your reply only; do not create or edit files. Table columns: ID (T-01...), Slice, Scenario, Given, When, Then, Acceptance criterion (1-6 from the assignment), Level (unit / concurrency / integration). Group by these slices and include at least these cases:
+
+C1 construction and validation: constructor throws ArgumentException for capacity 0 and -1; Enroll and Drop return InvalidRequest for null, "", "   " and a 65-character id; no state change.
+C2 enroll with capacity: Enrolled with null waitlist position; id is trimmed; fills to capacity; capacity 1 edge; offering without prerequisite makes everyone eligible.
+C3 prerequisite: PrerequisiteNotMet with a seat free and snapshot unchanged; learner who completed the prerequisite is Enrolled.
+C4 waitlist when full: Waitlisted with positions 1, 2, 3; ineligible learner when full gets PrerequisiteNotMet and is not on the waitlist; enrolled never exceeds capacity.
+C5 duplicates: repeat Enroll of an enrolled learner returns AlreadyEnrolled; repeat of a waitlisted learner returns AlreadyWaitlisted with the same position and a single record; case and whitespace variants of an id count as the same learner; an enrolled learner whose prerequisite was later removed still gets AlreadyEnrolled; snapshot unchanged.
+C6 drop basics: drop enrolled with empty waitlist returns Dropped and the seat is reusable; drop unknown learner returns NotEnrolled; repeated drop returns NotEnrolled with state unchanged; drop of a waitlisted learner returns RemovedFromWaitlist, later positions shift, nobody is promoted; id variants work.
+C7 FIFO promotion: drop promotes the earliest waiter and reports it in PromotedLearnerIds; successive drops promote in FIFO order; a learner who left the waitlist is not promoted.
+C8 eligibility during promotion: a front-of-queue learner whose prerequisite was removed after joining is skipped, retained in the same position, and the next eligible learner is promoted; a skipped learner who regains eligibility is promoted at the next promotion ahead of later waiters; a waitlist containing only ineligible learners leaves the seat free with empty PromotedLearnerIds; when a seat is free and a skipped waiter has become eligible again, a new Enroll call gives the seat to the waiter and waitlists the newcomer (no queue jumping); the same waiter's own repeat Enroll returns AlreadyEnrolled (promoted) with the snapshot showing them enrolled; an ineligible newcomer arriving while a newly eligible skipped waiter holds the head of the queue gets PrerequisiteNotMet while the waiter is promoted.
+C9 concurrency: 100 distinct learners enroll into capacity 10 (exactly 10 enrolled, 90 waitlisted, unique positions 1..90, no duplicates); 50 identical concurrent Enrolls of one learner (exactly one record); mixed concurrent Enrolls and Drops (invariants hold); 20 concurrent Drops of one enrolled learner (exactly one Dropped, 19 NotEnrolled, exactly one promotion).
+A0 API composition: configured offering and capacity are resolvable from the service container; capacity 0 or a missing offering Id fails startup.
+A1 POST enroll: 201 Enrolled; 202 Waitlisted with waitlistPosition 1; 200 AlreadyEnrolled; 200 AlreadyWaitlisted; 422 PrerequisiteNotMet as ProblemDetails; 400 for empty learnerId, missing body or null learnerId; 404 for an unknown offeringId.
+A2 DELETE: 200 Dropped with the waitlisted learner in promotedLearnerIds; repeat DELETE 200 NotEnrolled; DELETE by a waitlisted learner 200 RemovedFromWaitlist; 404 for an unknown offeringId.
+A3 GET: snapshot reflects enrolled and waitlist in order; 404 for an unknown offeringId.
+
+- Response summary: Copilot produced a 58-case table grouped by slices C1-C9 and A0-A3 with Given/When/Then and levels.
+- Decision: Edited
+- What I changed:
+  1. Rejected Copilot's invented acceptance-criterion legend; remapped every row to the assignment's actual criteria 1-6.
+  2. Rewrote T-11, T-12 (they exercised full capacity inside the C2 slice) and T-19 (used drops inside C4).
+  3. Replaced T-37, which only duplicated C5, with the scenario that exposes the free-seat/eligible-waiter defect found during spec review; made T-38 explicit.
+  4. Removed vague outcomes (T-10, T-13, T-22, T-29, T-36, T-40, T-42) and fixed the concurrency expectations.
+  5. Added T-59 to T-62 (64-character boundary, waitlisted-and-ineligible repeat, position shift, whitespace DELETE) and a coverage-versus-assignment section.
+- Files / decisions informed: `docs/test-plan.md`; Phase 1 prompts for C2, C4, C5, C7, C8 and C9
+- Verification: Cross-checked each row against the slice prompts and the design spec. Hand-traced T-37 against the original and revised Enroll order; automated verification comes when the C8 Phase 1 test fails and the Phase 2 test passes. [update later with real test names and results]
+- Commit: `docs: add test plan`
