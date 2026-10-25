@@ -81,7 +81,7 @@ public class EnrollmentService
         if (enrolledIndex >= 0)
         {
             _enrolled.RemoveAt(enrolledIndex);
-            return new DropResult(DropOutcome.Dropped, Array.Empty<string>());
+            return new DropResult(DropOutcome.Dropped, FillFreeSeats());
         }
 
         var waitlistIndex = _waitlist.FindIndex(
@@ -124,5 +124,19 @@ public class EnrollmentService
         var prerequisiteCourseCode = _options.PrerequisiteCourseCode;
         return string.IsNullOrWhiteSpace(prerequisiteCourseCode)
             || _records.HasCompleted(learnerId, prerequisiteCourseCode);
+    }
+
+    private List<string> FillFreeSeats()
+    {
+        var promotedLearnerIds = new List<string>();
+        while (_enrolled.Count < _options.Capacity && _waitlist.Count > 0)
+        {
+            var nextWaitlistEntry = _waitlist[0];
+            _waitlist.RemoveAt(0);
+            _enrolled.Add(nextWaitlistEntry.LearnerId);
+            promotedLearnerIds.Add(nextWaitlistEntry.LearnerId);
+        }
+
+        return promotedLearnerIds;
     }
 }

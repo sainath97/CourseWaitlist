@@ -343,3 +343,19 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: all 4 n
 - Review notes: T-32 fails only at the second drop (first drop's RemovedFromWaitlist assertions pass), isolating the missing promotion. No prerequisites or concurrency used; no unexpectedly passing tests; no production files touched.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C7` -> [4 failed, all on PromotedLearnerIds]; `git diff --stat` -> [only the new test file]
 - Commit: `test(core): add C7 FIFO promotion tests`
+
+### Entry 18: C7 Phase 2, FIFO promotion on drop (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C7. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C7 tests:
+- Add a private method FillFreeSeats() that returns the learner ids it promoted, as a new list in promotion order. While _enrolled.Count < _options.Capacity and _waitlist.Count > 0: take the head entry of _waitlist (index 0; entries are appended in ascending Sequence order), remove it from _waitlist, add its LearnerId to _enrolled, and record the id.
+- In Drop, call FillFreeSeats() ONLY in the branch that just removed an ENROLLED learner, and return DropResult(DropOutcome.Dropped, the promoted ids).
+- Do NOT call FillFreeSeats from the waitlist-removal branch, from the NotEnrolled path, or from Enroll. Do NOT add any eligibility check inside FillFreeSeats; eligibility during promotion is slice C8.
+- No locking, no other refactoring. Keep Enroll unchanged.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: added a private FillFreeSeats() that moves the head of the waitlist into the enrolled list while a seat is free and returns the promoted ids, called only after an enrolled learner is removed. Build clean; 42 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: single call site; no eligibility check inside FillFreeSeats; Enroll unchanged; no lock; no tests edited. Known intermediate state: promotion ignores eligibility and Enroll does not reconcile free seats until C8; T-33 to T-38 are planned and must fail first.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [42 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): promote waitlisted learners on drop`
