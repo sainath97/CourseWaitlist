@@ -39,6 +39,20 @@ public class EnrollmentService
             return new EnrollResult(EnrollOutcome.InvalidRequest, null);
         }
 
+        var enrolledIndex = _enrolled.FindIndex(
+            enrolledLearnerId => StringComparer.OrdinalIgnoreCase.Equals(enrolledLearnerId, normalizedLearnerId));
+        if (enrolledIndex >= 0)
+        {
+            return new EnrollResult(EnrollOutcome.AlreadyEnrolled, null);
+        }
+
+        var waitlistIndex = _waitlist.FindIndex(
+            entry => StringComparer.OrdinalIgnoreCase.Equals(entry.LearnerId, normalizedLearnerId));
+        if (waitlistIndex >= 0)
+        {
+            return new EnrollResult(EnrollOutcome.AlreadyWaitlisted, waitlistIndex + 1);
+        }
+
         if (!IsEligible(normalizedLearnerId))
         {
             return new EnrollResult(EnrollOutcome.PrerequisiteNotMet, null);

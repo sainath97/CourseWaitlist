@@ -269,3 +269,20 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: all 8 n
 - Review notes: T-23 and T-60 guard the rule that the duplicate check runs before the eligibility check. Snapshot-unchanged assertions in T-24 only become effective after Phase 2 (the outcome assertion fails first). No unexpectedly passing tests. No production files touched.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C5` -> [8 failed, reasons checked]; `git diff --stat` -> [only the new test file]
 - Commit: `test(core): add C5 duplicate enrollment tests`
+
+### Entry 14: C5 Phase 2, idempotent duplicates (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice C5. Edit only CourseWaitlist.Core/EnrollmentService.cs. Do not edit any test; if you believe a test must change, stop and tell me. Minimum to pass the C5 tests:
+- In Enroll, immediately after validation and BEFORE the eligibility check, add the duplicate checks using StringComparer.OrdinalIgnoreCase on the already trimmed id:
+  1. If the learner is in _enrolled, return EnrollResult(EnrollOutcome.AlreadyEnrolled, null).
+  2. If the learner is in _waitlist, return EnrollResult(EnrollOutcome.AlreadyWaitlisted, position), where position is the entry's zero-based index in _waitlist plus 1 (entries are only appended, so list order equals sequence order). Do NOT use _waitlist.Count for this.
+- Neither duplicate path changes any state, and the stored id keeps its first-submitted trimmed casing.
+- Keep the order: validation, duplicates, eligibility, capacity. Drop for valid ids stays NotImplementedException. No FillFreeSeats, no locking.
+Run dotnet build, then dotnet test (all tests), quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentService.cs: after validation and before the eligibility check, Enroll now finds an existing enrolled or waitlisted learner (OrdinalIgnoreCase on the trimmed id) and returns AlreadyEnrolled, or AlreadyWaitlisted with the entry's index plus one, without mutating state. Build clean; 32 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: check order is validation, duplicates, eligibility, capacity (required by T-23 and T-60); waitlist position derived from list index, not Count; first-seen casing preserved; no Drop, lock or FillFreeSeats code added early; no tests edited.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [32 passed]; `git diff --stat` -> [only EnrollmentService.cs]
+- Commit: `feat(core): make duplicate enrollments idempotent`
