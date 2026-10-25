@@ -73,3 +73,4 @@ Built in small test-first slices; locking is added in the final concurrency slic
 - Duplicate enrollment requests are idempotent by state and do not create records or change state.
 - Eligibility can change between operations because `ILearnerRecords` is mutable; the service reconciles free seats at the start of the next Enroll or after the next Drop that removes someone.
 - Promotions triggered inside Enroll are not included in the Enroll response.
+- The service stores the trimmed learner id exactly as first submitted; matching is case-insensitive, so later requests with different casing refer to the same learner.
