@@ -10,8 +10,8 @@ public static class EnrollmentEndpoints
 {
     public static IEndpointRouteBuilder MapEnrollmentEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGroup("/offerings/{offeringId}")
-            .MapPost("/enrollments", (
+        var offerings = app.MapGroup("/offerings/{offeringId}");
+        offerings.MapPost("/enrollments", (
                 string offeringId,
                 EnrollRequest? request,
                 EnrollmentService service,
@@ -68,6 +68,53 @@ public static class EnrollmentEndpoints
                 };
 #pragma warning restore CS8524
             });
+
+        offerings.MapDelete("/enrollments/{learnerId}", (
+            string offeringId,
+            string learnerId,
+            EnrollmentService service,
+            IOptions<OfferingOptions> options,
+            ILogger<Program> logger) =>
+        {
+            var trimmedLearnerId = learnerId.Trim();
+            if (!string.Equals(offeringId, options.Value.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInformation(
+                    "Drop outcome {Outcome} for learner {LearnerId}",
+                    "OfferingNotFound",
+                    trimmedLearnerId);
+                return Results.Problem(statusCode: 404, title: "Offering not found");
+            }
+
+            var result = service.Drop(learnerId);
+            var outcome = result.Outcome.ToString();
+            logger.LogInformation(
+                "Drop outcome {Outcome} for learner {LearnerId}",
+                outcome,
+                trimmedLearnerId);
+
+#pragma warning disable CS8524
+            return result.Outcome switch
+            {
+                DropOutcome.Dropped => Results.Json(
+                    new MutationResponse(outcome, trimmedLearnerId, null, result.PromotedLearnerIds),
+                    statusCode: 200),
+                DropOutcome.RemovedFromWaitlist => Results.Json(
+                    new MutationResponse(outcome, trimmedLearnerId, null, result.PromotedLearnerIds),
+                    statusCode: 200),
+                DropOutcome.NotEnrolled => Results.Json(
+                    new MutationResponse(outcome, trimmedLearnerId, null, result.PromotedLearnerIds),
+                    statusCode: 200),
+                DropOutcome.InvalidRequest => Results.Problem(
+                    statusCode: 400,
+                    title: "Invalid request",
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["outcome"] = outcome
+                    })
+            };
+#pragma warning restore CS8524
+        });
 
         return app;
     }

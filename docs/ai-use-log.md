@@ -537,3 +537,23 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: all 5 n
 - Review finding: the first build ran with 5 MSB3026 warnings because an API process from my manual smoke test was still running and locking the DLL. I stopped it and re-ran with -warnaserror.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=A2` -> [5 failed]; `git diff --stat` -> [only the new test file]
 - Commit: `test(api): add A2 drop endpoint tests`
+
+### Entry 28: A2 Phase 2, DELETE endpoint (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice A2. Files you may edit: CourseWaitlist.Api/Endpoints/EnrollmentEndpoints.cs only. Touch nothing else, including ApiContracts.cs and Program.cs. Do not edit any test; if you believe a test must change, stop and tell me. Implement ONLY the DELETE endpoint (no GET). Minimum to pass the A2 tests:
+- Assign `app.MapGroup("/offerings/{offeringId}")` to a local variable (for example `var offerings`) and map both POST and DELETE on it. This is the only change allowed to the existing POST code; its behavior must stay identical.
+- Add offerings.MapDelete("/enrollments/{learnerId}", handler). The handler takes: string offeringId, string learnerId, EnrollmentService service, IOptions<OfferingOptions> options, ILogger<Program> logger.
+- Handler order: (1) if offeringId does not equal options.Value.Id with StringComparison.OrdinalIgnoreCase, return Results.Problem(statusCode: 404, title: "Offering not found"); (2) call service.Drop(learnerId); (3) map the outcome with a switch expression over DropOutcome with no default arm (you may use the same narrowly scoped `#pragma warning disable CS8524` used in the POST handler):
+  Dropped, RemovedFromWaitlist and NotEnrolled -> Results.Json(new MutationResponse(outcome, trimmedLearnerId, null, promotedIds), statusCode: 200), where promotedIds is result.PromotedLearnerIds and is NEVER null (an empty list when nobody was promoted), so the JSON always contains the promotedLearnerIds array and never contains waitlistPosition.
+  InvalidRequest -> Results.Problem(statusCode: 400, title: "Invalid request", extensions: a dictionary containing "outcome" = "InvalidRequest").
+  trimmedLearnerId is learnerId.Trim().
+- Log one structured line per request with ILogger: outcome and learner id only (for example "Drop outcome {Outcome} for learner {LearnerId}"). Log nothing else.
+No locking, no new packages, no other endpoints.
+Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited only EnrollmentEndpoints.cs: moved the route group into a local variable and added the DELETE handler (offering check first, service.Drop, outcome mapping with the same narrowly scoped CS8524 suppression, always-present promotedLearnerIds array, problem+json for 404/400, one structured log line). Build clean; 71 passed, 0 failed.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: POST behavior unchanged (A1 tests still green); Program.cs and ApiContracts.cs untouched; no tests edited. Possible follow-up: the offering check is duplicated across handlers.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [67 passed]; manual DELETE smoke test -> [result]; `git diff --stat` -> [one file]
+- Commit: `feat(api): add enrollment drop endpoint`
