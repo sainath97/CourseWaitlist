@@ -179,3 +179,20 @@ Run dotnet build, then dotnet test (all tests), quote the real output, STOP, lis
 - Review notes: no duplicate, eligibility, waitlist or locking logic added early; snapshot is a copy; no tests edited. Known intentional gap: repeated Enroll of the same id adds a second entry until slice C5.
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [18 passed]; `git diff --stat` -> [only EnrollmentService.cs]
 - Commit: `feat(core): support enrollment within capacity`
+
+### Entry 9: C3 Phase 1, prerequisite tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C3 (prerequisite eligibility). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/EnrollmentPrerequisiteTests.cs. Touch nothing else, including TestServiceBuilder.cs and all production files.
+Implement T-14 and T-15 from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use the existing TestServiceBuilder (WithPrerequisite, WithCompleted, ExpectedSnapshot), ShouldMatch and AssertInvariants. Add [Trait("Slice","C3")] and [Trait("Case","T-xx")] to every test. Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments.
+- T-14: capacity 1, prerequisite "CS101", learner "A" has NOT completed it. Enroll("A") returns PrerequisiteNotMet with a null WaitlistPosition; the snapshot is unchanged (empty enrolled and waitlist). Then prove the seat is still free: learner "B", who completed CS101, calls Enroll and returns Enrolled.
+- T-15: capacity 2, prerequisite "CS101", learner "A" completed CS101 (seeded via WithCompleted). Enroll("A") returns Enrolled and the snapshot enrolled list is ["A"].
+Do not test full capacity, duplicates or drops in this slice.
+Run dotnet build, then dotnet test, and quote the real output. Expected: T-14 fails with NotImplementedException is NOT acceptable here; it must fail on an assertion (Enroll currently returns Enrolled instead of PrerequisiteNotMet). T-15 may already PASS because no eligibility check exists yet and the learner is eligible; if so, report that explicitly and do not delete or change it. Report any other failure reason. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added EnrollmentPrerequisiteTests (T-14, T-15). First build failed on a test setup reference (records accessed through the service instead of the builder); Copilot corrected it in the new file and re-ran. Final run: 1 failed, 19 passed, total 20. T-14 failed on the outcome assertion (expected PrerequisiteNotMet, found Enrolled); T-15 passed early.
+- Decision: Accepted
+- What I changed: nothing
+- Review notes: T-15 is an unexpectedly passing test, kept on purpose as a regression guard for eligible enrollment. T-14 never reached the full-capacity stub. No production or other test files changed.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Case=T-14` -> [failed on outcome assertion]; `--filter Case=T-15` -> [passed]; `git diff --stat` -> [only the new test file]
+- Commit: `test(core): add C3 prerequisite tests`
