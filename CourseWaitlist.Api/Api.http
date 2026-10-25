@@ -1,0 +1,73 @@
+@host = http://localhost:5000
+
+# Replace @host with the URL printed by `dotnet run --project CourseWaitlist.Api`.
+# State is in memory. Run requests top to bottom; restarting the API resets state.
+
+### Expected: 200 OK; empty enrolled and waitlist
+GET {{host}}/offerings/CS201-2026-FALL
+
+### Expected: 201 Created; Enrolled
+POST {{host}}/offerings/CS201-2026-FALL/enrollments
+Content-Type: application/json
+
+{"learnerId":"learner-001"}
+
+### Expected: 201 Created; Enrolled
+POST {{host}}/offerings/CS201-2026-FALL/enrollments
+Content-Type: application/json
+
+{"learnerId":"learner-002"}
+
+### Expected: 202 Accepted; Waitlisted at position 1
+POST {{host}}/offerings/CS201-2026-FALL/enrollments
+Content-Type: application/json
+
+{"learnerId":"learner-003"}
+
+### Expected: 200 OK; AlreadyWaitlisted
+POST {{host}}/offerings/CS201-2026-FALL/enrollments
+Content-Type: application/json
+
+{"learnerId":"learner-003"}
+
+### Expected: 200 OK; AlreadyEnrolled
+POST {{host}}/offerings/CS201-2026-FALL/enrollments
+Content-Type: application/json
+
+{"learnerId":"learner-001"}
+
+### Expected: 422 Unprocessable Entity; PrerequisiteNotMet, problem+json
+POST {{host}}/offerings/CS201-2026-FALL/enrollments
+Content-Type: application/json
+
+{"learnerId":"learner-004"}
+
+### Expected: 400 Bad Request; InvalidRequest, problem+json
+POST {{host}}/offerings/CS201-2026-FALL/enrollments
+Content-Type: application/json
+
+{"learnerId":""}
+
+### Expected: 404 Not Found; problem+json
+POST {{host}}/offerings/UNKNOWN/enrollments
+Content-Type: application/json
+
+{"learnerId":"learner-001"}
+
+### Expected: 200 OK; enrolled learner-001 and learner-002, waitlist learner-003
+GET {{host}}/offerings/CS201-2026-FALL
+
+### Expected: 200 OK; Dropped, promotedLearnerIds contains learner-003
+DELETE {{host}}/offerings/CS201-2026-FALL/enrollments/learner-001
+
+### Expected: 200 OK; NotEnrolled
+DELETE {{host}}/offerings/CS201-2026-FALL/enrollments/learner-001
+
+### Expected: 400 Bad Request; InvalidRequest, problem+json
+DELETE {{host}}/offerings/CS201-2026-FALL/enrollments/%20
+
+### Expected: 200 OK; enrolled learner-002 and learner-003, empty waitlist
+GET {{host}}/offerings/CS201-2026-FALL
+
+### Expected: 404 Not Found; problem+json
+GET {{host}}/offerings/UNKNOWN

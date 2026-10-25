@@ -593,3 +593,31 @@ Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, 
 - Review notes: I diffed both files against their previous versions; the change is additive only, POST and DELETE handlers are byte-identical; arrays are never null so both properties always appear; empty route pattern works in this framework version (T-57 passes).
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [69 passed]; `git diff --stat` -> [two files]
 - Commit: `feat(api): add offering snapshot GET endpoint`
+
+### Entry 31: Api.http manual request file (Copilot Agent mode, docs only)
+- Prompt (sanitized):
+Step: add a manual-test request file. One concern: a single new file, no code changes.
+Files you may create: CourseWaitlist.Api/Api.http. Touch nothing else. This file is not compiled; do not run dotnet build or dotnet test, and say that you did not. Do not start the API.
+Write a REST Client / Visual Studio compatible .http file with a variable `@host = http://localhost:5000` and a comment saying to replace it with the URL printed by `dotnet run --project CourseWaitlist.Api`. Use the demo configuration from appsettings.json: offering id CS201-2026-FALL, capacity 2, prerequisite CS101, eligible learners learner-001, learner-002, learner-003, ineligible learner-004. Add a header comment saying: state is in memory, requests are meant to be run top to bottom, and restarting the API resets state. Separate requests with `###` and put a one-line comment above each stating the expected status and outcome. Include, in this order:
+1. GET the offering snapshot (200, empty enrolled and waitlist)
+2. POST learner-001 (201 Enrolled)
+3. POST learner-002 (201 Enrolled)
+4. POST learner-003 (202 Waitlisted, position 1)
+5. POST learner-003 again (200 AlreadyWaitlisted)
+6. POST learner-001 again (200 AlreadyEnrolled)
+7. POST learner-004 (422 PrerequisiteNotMet, problem+json)
+8. POST with body {"learnerId":""} (400 InvalidRequest, problem+json)
+9. POST to /offerings/UNKNOWN/enrollments (404, problem+json)
+10. GET the snapshot (200, enrolled learner-001 and learner-002, waitlist learner-003)
+11. DELETE learner-001 (200 Dropped, promotedLearnerIds contains learner-003)
+12. DELETE learner-001 again (200 NotEnrolled)
+13. DELETE with a whitespace id (/enrollments/%20) (400 InvalidRequest, problem+json)
+14. GET the snapshot (200, enrolled learner-002 and learner-003, empty waitlist)
+15. GET /offerings/UNKNOWN (404, problem+json)
+Every POST sends Content-Type: application/json. List changed files and propose a Conventional Commit message.
+
+- Response summary: Copilot created Api.http with 15 requests in the specified order and expected-outcome comments. It did not run build or test, as instructed.
+- Decision: Accepted
+- Review notes: I checked the order and expected statuses against the service behavior and ran the file against the demo configuration.
+- Verification (my own run): started the API with the demo appsettings.json and ran all 15 requests in Api.http top to bottom: 15 of 15 statuses matched the expected comments. Stopped the API afterwards.
+- Commit: `docs(api): add manual HTTP test requests`
