@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="CourseWaitlist.Api/CourseWaitlist.Api.csproj" />
+  <Project Path="CourseWaitlist.Core/CourseWaitlist.Core.csproj" />
+  <Project Path="CourseWaitlist.Tests/CourseWaitlist.Tests.csproj" />
+</Solution>
