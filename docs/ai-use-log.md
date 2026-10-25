@@ -107,3 +107,19 @@ Run `dotnet build` and report the real output. STOP, list changed files, propose
 - Files / decisions informed: Core public API; C1 test-support helpers
 - Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [no tests, expected]; `git diff --stat` -> [only the nine Core files]
 - Commit: `feat(core): add enrollment service skeleton`
+
+### Entry 5: C1 Phase 1, validation tests (Copilot Agent mode)
+- Prompt (sanitized):
+Slice C1 (construction and input validation). Phase 1: tests only.
+Files you may create: CourseWaitlist.Tests/Support/TestServiceBuilder.cs, CourseWaitlist.Tests/Support/InvariantAssertions.cs, CourseWaitlist.Tests/Support/SnapshotAssertions.cs, CourseWaitlist.Tests/EnrollmentValidationTests.cs. Touch nothing else. Do not edit production code.
+- TestServiceBuilder: WithCapacity(int), WithPrerequisite(string?), WithCompleted(courseCode, params string[] learnerIds); exposes the InMemoryLearnerRecords instance so tests can Add/Remove later; Build() returns EnrollmentService. Seed learner ids without surrounding whitespace.
+- InvariantAssertions.AssertInvariants(OfferingSnapshot): enrolled count <= capacity, no overlap between enrolled and waitlist, no case-insensitive duplicates inside either list.
+- SnapshotAssertions.ShouldMatch(this OfferingSnapshot actual, OfferingSnapshot expected): compares OfferingId, CourseCode, Capacity and the Enrolled and Waitlist lists element by element in order (FluentAssertions Equal on the lists). Never compare snapshots or results containing lists with Be/Equals, because record equality compares the lists by reference.
+- Implement the C1 cases (T-01 to T-08) from #file:docs/test-plan.md with xUnit + FluentAssertions 7.x only. Use [Theory] with [InlineData] for null, empty and whitespace ids; build the 65-character id with new string('a', 65) in a separate [Fact] or [MemberData], since InlineData needs constants. For constructor tests assert Action.Should().Throw<ArgumentException>(). Names Method_Scenario_ExpectedResult, Arrange/Act/Assert comments, [Trait("Slice","C1")] on each test. Call AssertInvariants wherever a snapshot is available.
+Run dotnet build, then dotnet test, and quote the real output. Expected failures: constructor tests fail with "expected ArgumentException but none was thrown"; Enroll, Drop and GetSnapshot tests fail with NotImplementedException. Report any other failure reason. STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot added TestServiceBuilder, InvariantAssertions, SnapshotAssertions and EnrollmentValidationTests (12 tests). Its first run failed during setup because tests called GetSnapshot before the operation under test; it restructured the tests to act first and re-ran. Final run: 12 failed, 0 passed; failures were ArgumentException-not-thrown and NotImplementedException.
+- Decision: Accepted with edits
+- What I changed: added [Trait("Case","T-xx")] traits by hand; added T-63 to the test plan for the extra GetSnapshot test.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice=C1` -> [12 failed, reasons checked]; `git status` -> [only test files].
+- Commit: `test(core): add C1 validation tests`

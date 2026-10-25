@@ -22,6 +22,7 @@ The Acceptance criterion column uses the assignment's criteria:
 | T-06 | C1 | Enroll rejects 65-character learner ID | Valid offering, ID length = 65 | `Enroll` | Returns `InvalidRequest`; state unchanged | 5 | unit |
 | T-07 | C1 | Drop rejects invalid learner ID | Valid offering, `learnerId = null` / `""` / `"   "` / 65 chars | `Drop` | Returns `InvalidRequest`; state unchanged | 5 | unit |
 | T-08 | C1 | No state change on invalid input | Valid offering with empty state | Invalid `Enroll` / `Drop` calls | Snapshot remains empty; no enrolled or waitlist entries are created | 5 | unit |
+T-63 | C1 | GetSnapshot on a new offering returns metadata and empty lists | | | | 5 | unit
 
 ## C2 — enroll with capacity
 
