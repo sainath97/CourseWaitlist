@@ -29,3 +29,16 @@ Do not propose alternative designs. If you see a problem, list it under "Open qu
 - Files / decisions informed: `docs/design-spec.md`; Enroll ordering; test-plan cases added to slice C8; GET contract for slice A3
 - Verification: Checked the spec against acceptance criteria 1-5 and the scope boundaries. Hand-walked the scenario in change 2 against the original and edited Enroll order to confirm the original left the invariant broken. Automated verification pending: the new C8 tests (waiter's own repeat Enroll after becoming eligible; ineligible newcomer) must fail in Phase 1 and pass in Phase 2. [update with test names and results later]
 - Commit: `docs: add design specification`
+
+### Entry 2: Solution scaffold (Copilot Agent mode)
+- Prompt (sanitized): [paste exact Prompt 2 text]
+- Response summary: Copilot created the .slnx solution and three net10.0 projects, wired references, added Directory.Build.props, .editorconfig, .gitignore, removed the Class1.cs and UnitTest1.cs placeholders, appended `public partial class Program { }`, and proposed the commit message `chore: scaffold course waitlist solution`.
+- Decision: Edited
+- Deviations I found on review:
+  1. First scaffold ran from the parent directory; Copilot then deleted its generated output there and re-ran in the repo. I checked the parent folder: nothing else was affected.
+  2. Deleted appsettings.json, appsettings.Development.json and excluded launchSettings.json, none of which I named. Accepted the outcome (appsettings is recreated in slice A0) but added a rule to the instructions file forbidding unnamed deletions and out-of-repo commands.
+  3. Wrote Microsoft.AspNetCore.Mvc.Testing as a floating `10.0.*`; I pinned it to `10.0.13` by hand for reproducible builds.
+  4. Summarized build/test output instead of quoting it; I ran the commands myself.
+- Verification (my own runs): `dotnet build CourseWaitlist.slnx -warnaserror` -> [0 warnings, 0 errors]; `dotnet test` -> [no tests available, expected]; `dotnet list package` -> FluentAssertions 7.2.0, Mvc.Testing 10.0.13, xUnit packages: 2.9.3; `git status` -> [clean / files listed].
+- Files / decisions informed: solution structure, `.github/copilot-instructions.md` (rule tightening), A0 slice (appsettings.json must now be created)
+- Commits: `chore: scaffold course waitlist solution`; `docs: restrict copilot to repo root and named files; log scaffold`
