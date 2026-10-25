@@ -492,3 +492,27 @@ Run dotnet build, then dotnet test, and quote the real output. Expected: ALL 11 
 - Review finding: the content-type assertions in T-50, T-51 and T-52 used `?.`, which skips the assertion when the header is absent. Copilot said the unmapped route returned problem+json; the follow-up run showed T-52 failing with "ContentType not to be <null>", so the header was absent and the claim was unsupported. I replaced the three assertions with NotBeNull plus a media-type check. T-50 and T-51 fail at the status check, so their content-type assertions are only exercised once the endpoint exists.
 - Verification (my own runs): `dotnet test --filter Case=T-52` -> [message above]; `dotnet test --filter Slice!=C9` -> [11 failed, 41 passed]; `git diff --stat` -> [only the new test file]
 - Commit: `test(api): add A1 enroll endpoint tests`
+
+### Entry 26: A1 Phase 2, POST enrollment endpoint (Copilot Agent mode)
+- Prompt (sanitized):
+Phase 2. Slice A1. Files you may create or edit: CourseWaitlist.Api/Program.cs, CourseWaitlist.Api/Endpoints/EnrollmentEndpoints.cs (new), CourseWaitlist.Api/Contracts/ApiContracts.cs (new). Touch nothing else. Do not edit any test; if you believe a test must change, stop and tell me. Implement ONLY the POST endpoint (no DELETE, no GET). Minimum to pass the A1 tests:
+- Contracts (record types, in ApiContracts.cs): EnrollRequest(string? LearnerId) and MutationResponse(string Outcome, string LearnerId, int? WaitlistPosition, IReadOnlyList<string>? PromotedLearnerIds). Both will be reused by the DELETE slice.
+- Program.cs: call builder.Services.ConfigureHttpJsonOptions so SerializerOptions adds JsonStringEnumConverter and sets DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull (web defaults already give camelCase). Remove the template `app.MapGet("/", ...)` Hello World endpoint. Call a new extension method app.MapEnrollmentEndpoints() defined in EnrollmentEndpoints.cs. Keep everything from A0 and `public partial class Program { }`.
+- EnrollmentEndpoints.cs: a static class with a public static extension method MapEnrollmentEndpoints(this IEndpointRouteBuilder). Use app.MapGroup("/offerings/{offeringId}") and MapPost("/enrollments", handler). The handler takes: string offeringId, EnrollRequest? request (nullable so an empty or missing body reaches my validation and does NOT produce a framework error), EnrollmentService service, IOptions<OfferingOptions> options, ILogger<Program> logger.
+- Handler order: (1) if offeringId does not equal options.Value.Id with StringComparison.OrdinalIgnoreCase, return Results.Problem(statusCode: 404, title: "Offering not found"); (2) call service.Enroll(request?.LearnerId); (3) map the outcome:
+  Enrolled -> Results.Json(response, statusCode: 201)
+  Waitlisted -> Results.Json(response, statusCode: 202)
+  AlreadyEnrolled and AlreadyWaitlisted -> Results.Json(response, statusCode: 200)
+  PrerequisiteNotMet -> Results.Problem(statusCode: 422, title: "Prerequisite not met", extensions: a dictionary containing "outcome" = "PrerequisiteNotMet" and "learnerId" = the trimmed request learner id)
+  InvalidRequest -> Results.Problem(statusCode: 400, title: "Invalid request", extensions: a dictionary containing "outcome" = "InvalidRequest")
+  where response = new MutationResponse(result.Outcome.ToString(), learner id as submitted trimmed, result.WaitlistPosition, null). Never throw for any outcome. Use a switch expression over EnrollOutcome with no default arm so a future outcome causes a compile warning. Do not echo untrimmed ids.
+- Log one structured line per request with ILogger: outcome and learner id only (for example logger.LogInformation("Enroll outcome {Outcome} for learner {LearnerId}", ...)). Log nothing else.
+No locking, no new packages, no other endpoints.
+Run dotnet build, then dotnet test (all tests) and quote the real output, STOP, list changed files, and propose a Conventional Commit message.
+
+- Response summary: Copilot edited Program.cs (JSON options with string enums and null omission, removed the Hello World route, mapped the endpoints) and created EnrollmentEndpoints.cs and ApiContracts.cs. The first build failed on a missing using and on warning CS8524; both were fixed in the authorized files. Final: build clean, 66 passed, 0 failed.
+- Decision: Accepted with one disclosed deviation
+- Deviation: Copilot wrapped the outcome switch in `#pragma warning disable CS8524` to satisfy warnings-as-errors. I accepted it: CS8524 only concerns unnamed enum values; adding a new named outcome still triggers CS8509 and fails the build, so the exhaustiveness check I wanted is preserved.
+- Review notes: offering check precedes Enroll; body parameter is nullable so empty bodies reach validation; 404/422/400 use Results.Problem. Follow-ups for limitations: response echoes the trimmed request id (not stored casing); user-supplied ids are logged without a length limit; malformed JSON and unsupported content types are not covered by tests.
+- Verification (my own runs): `dotnet build -warnaserror` -> [0 warnings, 0 errors]; `dotnet test --filter Slice!=C9` -> [63 passed]; manual POSTs against the demo config -> [201 then 422]; `git diff --stat` -> [expected files only]
+- Commit: `feat(api): add enrollment POST endpoint`

@@ -1,7 +1,15 @@
 using CourseWaitlist.Core;
+using CourseWaitlist.Api.Endpoints;
 using Microsoft.Extensions.Options;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+});
 
 builder.Services
     .AddOptions<OfferingOptions>()
@@ -40,7 +48,7 @@ builder.Services.AddSingleton<EnrollmentService>(serviceProvider =>
 
 var app = builder.Build();
 
-app.MapGet("/", () => "Hello World!");
+app.MapEnrollmentEndpoints();
 
 app.Run();
 
